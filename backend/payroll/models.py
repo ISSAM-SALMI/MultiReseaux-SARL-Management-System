@@ -59,8 +59,5 @@ class Leave(models.Model):
     duration = models.DecimalField(max_digits=4, decimal_places=1, help_text="Durée en jours") 
     reason = models.TextField(blank=True, null=True)
 
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        if self.salary_period:
-            self.salary_period.calculate_salary()
+
 

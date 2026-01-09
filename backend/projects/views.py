@@ -6,6 +6,7 @@ class ProjectViewSet(BaseViewSet):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
     module_name = 'projects'
+    pagination_class = None
 
 class ProjectWorkerAttendanceViewSet(BaseViewSet):
     queryset = ProjectWorkerAttendance.objects.all()
