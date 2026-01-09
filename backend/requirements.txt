@@ -1,0 +1,14 @@
+Django>=5.0
+djangorestframework
+djangorestframework-simplejwt
+psycopg2-binary
+celery
+redis
+django-cors-headers
+django-filter
+weasyprint
+django-storages
+boto3
+gunicorn
+dj-database-url
+reportlab

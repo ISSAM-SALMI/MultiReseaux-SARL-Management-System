@@ -1,0 +1,349 @@
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { Plus, Trash2, Printer, Search } from 'lucide-react';
+import api from '../api/axios';
+import { DataTable } from '../components/DataTable';
+
+interface QuoteLine {
+  id?: number;
+  designation: string;
+  quantite: number;
+  prix_unitaire: number;
+  montant_ht: number;
+}
+
+interface Quote {
+  id_quote: number;
+  numero_devis: string;
+  objet: string;
+  lines: QuoteLine[];
+}
+
+interface SupplierOrderLine {
+    id?: number;
+    designation: string;
+    quantite_commandee: number;
+    prix_unitaire_fournisseur: number;
+    montant_ht: number;
+}
+
+interface SupplierOrder {
+    id_order: number;
+    quote: number | null;
+    quote_numero?: string;
+    date_creation: string;
+    total_ht: number;
+    nom_commande?: string;
+    lines: SupplierOrderLine[];
+}
+
+export const SupplierOrders = () => {
+    const queryClient = useQueryClient();
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingOrder, setEditingOrder] = useState<SupplierOrder | null>(null);
+    const [selectedQuoteId, setSelectedQuoteId] = useState<string>('');
+    const [orderLines, setOrderLines] = useState<SupplierOrderLine[]>([]);
+    const [nomCommande, setNomCommande] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+
+    // Fetch Supplier Orders
+    const { data: orders = [], isLoading } = useQuery<SupplierOrder[]>('supplierOrders', async () => {
+        const response = await api.get('/quotes/orders/');
+        return response.data.results || response.data;
+    });
+
+    // Fetch Quotes for selection
+    const { data: quotes = [] } = useQuery<Quote[]>('quotes', async () => {
+        const response = await api.get('/quotes/');
+        return response.data.results || response.data;
+    });
+
+    const createMutation = useMutation(
+        (newOrder: any) => api.post('/quotes/orders/', newOrder),
+        {
+            onSuccess: () => {
+                queryClient.invalidateQueries('supplierOrders');
+                closeModal();
+            }
+        }
+    );
+
+    const updateMutation = useMutation(
+        (order: any) => api.put(`/quotes/orders/${order.id_order}/`, order),
+        {
+            onSuccess: () => {
+                queryClient.invalidateQueries('supplierOrders');
+                closeModal();
+            }
+        }
+    );
+
+    const deleteMutation = useMutation(
+        (id: number) => api.delete(`/quotes/orders/${id}/`),
+        {
+            onSuccess: () => queryClient.invalidateQueries('supplierOrders')
+        }
+    );
+
+    const handleQuoteChange = async (quoteId: string) => {
+        setSelectedQuoteId(quoteId);
+        if (!quoteId) {
+            setOrderLines([]);
+            return;
+        }
+
+        // Fetch full quote details including lines
+        try {
+            const response = await api.get(`/quotes/${quoteId}/`);
+            const quoteData: Quote = response.data;
+            
+            // Map quote lines to order lines
+            const initialLines: SupplierOrderLine[] = quoteData.lines.map(line => ({
+                designation: line.designation,
+                quantite_commandee: line.quantite,
+                prix_unitaire_fournisseur: 0, // Should be filled by user? Or use a default?
+                montant_ht: 0
+            }));
+            setOrderLines(initialLines);
+        } catch (error) {
+            console.error("Error fetching quote details", error);
+        }
+    };
+
+    const handleLineChange = (index: number, field: keyof SupplierOrderLine, value: any) => {
+        const newLines = [...orderLines];
+        newLines[index] = { ...newLines[index], [field]: value };
+        
+        // Recalculate Total HT for line
+        if (field === 'quantite_commandee' || field === 'prix_unitaire_fournisseur') {
+            const qty = field === 'quantite_commandee' ? parseFloat(value) || 0 : newLines[index].quantite_commandee;
+            const price = field === 'prix_unitaire_fournisseur' ? parseFloat(value) || 0 : newLines[index].prix_unitaire_fournisseur;
+            newLines[index].montant_ht = qty * price;
+        }
+
+        setOrderLines(newLines);
+    };
+
+    const addLine = () => {
+        setOrderLines([...orderLines, {
+            designation: '',
+            quantite_commandee: 1,
+            prix_unitaire_fournisseur: 0,
+            montant_ht: 0
+        }]);
+    };
+
+    const removeLine = (index: number) => {
+        const newLines = orderLines.filter((_, i) => i !== index);
+        setOrderLines(newLines);
+    };
+
+    const calculateTotal = () => {
+        return orderLines.reduce((sum, line) => sum + (line.montant_ht || 0), 0);
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const payload = {
+            quote: selectedQuoteId ? parseInt(selectedQuoteId) : null,
+            nom_commande: nomCommande,
+            lines: orderLines,
+            total_ht: calculateTotal()
+        };
+
+        if (editingOrder) {
+            updateMutation.mutate({ ...payload, id_order: editingOrder.id_order });
+        } else {
+            createMutation.mutate(payload);
+        }
+    };
+
+    const openModal = (order?: SupplierOrder) => {
+        if (order) {
+            setEditingOrder(order);
+            setNomCommande(order.nom_commande || '');
+            setSelectedQuoteId(order.quote?.toString() || '');
+            setOrderLines(order.lines);
+        } else {
+            setEditingOrder(null);
+            setNomCommande('');
+            setSelectedQuoteId('');
+            setOrderLines([]);
+        }
+        setIsModalOpen(true);
+    };
+
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setEditingOrder(null);
+    };
+    
+    const printOrder = async (order: SupplierOrder) => {
+        try {
+            const response = await api.get(`/quotes/orders/${order.id_order}/pdf/`, {
+                responseType: 'blob'
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `commande_${order.id_order}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (err) {
+            console.error("Error downloading PDF", err);
+        }
+    };
+
+    return (
+        <div>
+            <DataTable
+                title="Commandes Fournisseurs"
+                data={orders}
+                isLoading={isLoading}
+                onCreate={() => openModal()}
+                onEdit={(order) => openModal(order)}
+                onDelete={(order) => { 
+                    if(confirm('Supprimer cette commande ?')) deleteMutation.mutate(order.id_order) 
+                }}
+                renderActions={(order) => (
+                    <button onClick={() => printOrder(order)} className="p-1 text-gray-600 hover:bg-gray-100 rounded" title="Imprimer">
+                        <Printer className="w-4 h-4" />
+                    </button>
+                )}
+                columns={[
+                    { header: 'ID', accessor: 'id_order' },
+                    { header: 'Nom / Réf', accessor: (item) => item.nom_commande || `Cmd #${item.id_order}` },
+                    { header: 'Devis lié', accessor: 'quote_numero' },
+                    { header: 'Date', accessor: (item) => new Date(item.date_creation).toLocaleDateString() },
+                    { header: 'Total HT', accessor: (item) => `${item.total_ht} DH` },
+                ]}
+            />
+
+            {isModalOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+                    <div className="bg-white p-6 rounded-lg w-full max-w-4xl m-4 max-h-[90vh] overflow-y-auto">
+                        <h3 className="text-lg font-bold mb-4">
+                            {editingOrder ? 'Modifier Commande' : 'Nouvelle Commande Fournisseur'}
+                        </h3>
+                        
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Nom de la commande (Optionnel)</label>
+                                    <input 
+                                        type="text" 
+                                        className="w-full p-2 border rounded"
+                                        value={nomCommande}
+                                        onChange={(e) => setNomCommande(e.target.value)}
+                                        placeholder="Ex: Commande Matériel Élec"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Associer à un devis</label>
+                                    <div className="relative">
+                                        <select
+                                            className="w-full p-2 border rounded"
+                                            value={selectedQuoteId}
+                                            onChange={(e) => handleQuoteChange(e.target.value)}
+                                            disabled={!!editingOrder} // Disable changing quote on edit for simplicity
+                                        >
+                                            <option value="">Sélectionner un devis (pour charger les lignes)</option>
+                                            {quotes.map(quote => (
+                                                <option key={quote.id_quote} value={quote.id_quote}>
+                                                    {quote.numero_devis} - {quote.objet}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border rounded-lg overflow-hidden">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-gray-100">
+                                        <tr>
+                                            <th className="p-3 border-b text-sm font-semibold w-5/12">Désignation</th>
+                                            <th className="p-3 border-b text-sm font-semibold w-2/12">Qté Cmd</th>
+                                            <th className="p-3 border-b text-sm font-semibold w-2/12">PU HT Fourn.</th>
+                                            <th className="p-3 border-b text-sm font-semibold w-2/12 text-right">Total HT</th>
+                                            <th className="p-3 border-b text-sm font-semibold w-1/12"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {orderLines.map((line, index) => (
+                                            <tr key={index} className="border-b last:border-b-0">
+                                                <td className="p-2">
+                                                    <input 
+                                                        type="text" 
+                                                        className="w-full p-1 border rounded"
+                                                        value={line.designation}
+                                                        onChange={(e) => handleLineChange(index, 'designation', e.target.value)}
+                                                    />
+                                                </td>
+                                                <td className="p-2">
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-full p-1 border rounded"
+                                                        value={line.quantite_commandee}
+                                                        onChange={(e) => handleLineChange(index, 'quantite_commandee', e.target.value)}
+                                                    />
+                                                </td>
+                                                <td className="p-2">
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-full p-1 border rounded"
+                                                        value={line.prix_unitaire_fournisseur}
+                                                        onChange={(e) => handleLineChange(index, 'prix_unitaire_fournisseur', e.target.value)}
+                                                    />
+                                                </td>
+                                                <td className="p-2 text-right font-medium">
+                                                    {(line.montant_ht || 0).toFixed(2)} DH
+                                                </td>
+                                                <td className="p-2 text-center">
+                                                    <button type="button" onClick={() => removeLine(index)} className="text-red-500 hover:text-red-700">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot className="bg-gray-50">
+                                        <tr>
+                                            <td colSpan={5} className="p-2">
+                                                <button type="button" onClick={addLine} className="flex items-center text-blue-600 hover:text-blue-800 text-sm">
+                                                    <Plus className="w-4 h-4 mr-1" /> Ajouter une ligne
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+
+                            <div className="flex justify-end items-center bg-gray-50 p-4 rounded">
+                                <span className="font-bold text-lg mr-4">Total HT Général:</span>
+                                <span className="font-bold text-xl text-blue-600">{calculateTotal().toFixed(2)} DH</span>
+                            </div>
+
+                            <div className="flex justify-end space-x-2 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={closeModal}
+                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                >
+                                    Enregistrer
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
