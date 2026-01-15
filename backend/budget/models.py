@@ -41,3 +41,27 @@ class MaterialCost(models.Model):
 
     class Meta:
         db_table = 'MATERIAL_COSTS'
+
+class GeneralExpense(models.Model):
+    CATEGORY_CHOICES = [
+        ('TRANSPORT', 'Transport'),
+        ('FUEL', 'Carburant / Auto'),
+        ('LOGISTICS', 'Logistique'),
+        ('OFFICE', 'Bureau & Administratif'),
+        ('OTHER', 'Autre'),
+    ]
+
+    id_expense = models.AutoField(primary_key=True)
+    label = models.CharField(max_length=255, verbose_name="Libellé")
+    amount = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Montant")
+    date = models.DateField(verbose_name="Date")
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='OTHER', verbose_name="Catégorie")
+    description = models.TextField(blank=True, null=True, verbose_name="Observation")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'GENERAL_EXPENSES'
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"{self.date} - {self.label} ({self.amount})"

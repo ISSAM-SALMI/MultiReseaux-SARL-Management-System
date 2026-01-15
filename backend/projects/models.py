@@ -16,6 +16,14 @@ class Project(models.Model):
     date_debut = models.DateField()
     date_fin = models.DateField()
     etat_projet = models.CharField(max_length=20, choices=STATUS_CHOICES, default='EN_ATTENTE')
+    
+    BILLING_STATUS_CHOICES = [
+        ('NON_FACTURE', 'Non facturé'),
+        ('EN_COURS', 'En cours'),
+        ('FACTURE', 'Facturé'),
+    ]
+    billing_status = models.CharField(max_length=20, choices=BILLING_STATUS_CHOICES, default='NON_FACTURE', verbose_name="Statut de facturation")
+    
     budget_total = models.DecimalField(max_digits=15, decimal_places=2)
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='projects', db_column='id_client')
     chef_projet = models.CharField(max_length=255, blank=True, null=True) # Or ForeignKey to User/Employee

@@ -1,411 +1,390 @@
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import React, { useState, useMemo } from 'react';
+import { useQuery, useMutation } from 'react-query';
 import { 
-  FileText, Plus, Search, Trash2, Calendar, Building, 
-  DollarSign, X, Filter, ArrowUpRight, Save, Receipt
+    Download, 
+    FileText, 
+    History, 
+    Plus, 
+    Calendar, 
+    Printer,
+    ChevronRight,
+    AlertCircle,
+    Receipt
 } from 'lucide-react';
 import api from '../api/axios';
 
-interface Project {
-  id_project: number;
-  nom_projet: string;
+interface Quote {
+  id_quote: number;
+  numero_devis: string;
+  objet: string;
+  date_livraison: string;
+  client_name?: string;
+  project_name?: string;
 }
 
-interface Invoice {
-  id_invoice: number;
-  date: string;
-  fournisseur: string;
-  montant: number;
-  project: number;
+interface DeliveryLine {
+  designation: string;
+  quantite: number;
+  prix_unitaire: number;
 }
 
-const InvoiceDetailsPanel = ({ 
-  invoice, 
-  projects,
-  onClose,
-  isCreating = false 
-}: { 
-  invoice: Invoice | null; 
-  projects: Project[];
-  onClose: () => void;
-  isCreating: boolean;
-}) => {
-  const queryClient = useQueryClient();
-  const [formData, setFormData] = useState<Partial<Invoice>>({
-    fournisseur: '',
-    montant: 0,
-    date: new Date().toISOString().split('T')[0],
-    project: undefined
-  });
-
-  // Load data
-  useMemo(() => {
-    if (invoice && !isCreating) {
-      setFormData(invoice);
-    } else if (isCreating) {
-      setFormData({
-        fournisseur: '',
-        montant: 0,
-        date: new Date().toISOString().split('T')[0],
-        project: undefined
-      });
-    }
-  }, [invoice, isCreating]);
-
-  const createMutation = useMutation(
-    (data: any) => api.post('/invoices/', data),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('invoices');
-        onClose();
-      },
-      onError: (err: any) => alert("Erreur lors de la création")
-    }
-  );
-
-  const updateMutation = useMutation(
-    (data: any) => api.put(`/invoices/${invoice?.id_invoice}/`, data),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('invoices');
-      },
-      onError: (err: any) => alert("Erreur lors de la modification")
-    }
-  );
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isCreating) {
-      createMutation.mutate(formData);
-    } else if (invoice?.id_invoice) {
-      updateMutation.mutate({ ...formData, id_invoice: invoice.id_invoice });
-    }
-  };
-
-  return (
-    <div className="h-full flex flex-col bg-white border-l shadow-2xl">
-      <div className="p-6 border-b bg-gray-50 flex justify-between items-center">
-        <div>
-           <h2 className="text-xl font-bold text-gray-900">{isCreating ? 'Nouvelle Facture' : 'Détails Facture'}</h2>
-           <p className="text-sm text-gray-500">{isCreating ? 'Saisir les informations' : `Réf: #${invoice?.id_invoice}`}</p>
-        </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-          <X className="w-6 h-6" />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6">
-         <form onSubmit={handleSubmit} className="space-y-6">
-             <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Fournisseur</label>
-                 <div className="relative">
-                     <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                     <input
-                         type="text"
-                         required
-                         value={formData.fournisseur}
-                         onChange={(e) => setFormData({...formData, fournisseur: e.target.value})}
-                         className="w-full pl-10 border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                         placeholder="Nom du fournisseur"
-                     />
-                 </div>
-             </div>
-
-             <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Projet Concerné</label>
-                 <div className="relative">
-                     <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                     <select
-                         required
-                         value={formData.project || ''}
-                         onChange={(e) => setFormData({...formData, project: parseInt(e.target.value)})}
-                         className="w-full pl-10 border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition-colors appearance-none bg-white"
-                     >
-                         <option value="">Sélectionner un projet...</option>
-                         {projects.map(p => (
-                             <option key={p.id_project} value={p.id_project}>{p.nom_projet}</option>
-                         ))}
-                     </select>
-                 </div>
-             </div>
-
-             <div className="grid grid-cols-2 gap-4">
-                 <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Date Facture</label>
-                     <div className="relative">
-                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                        <input
-                            type="date"
-                            required
-                            value={formData.date}
-                            onChange={(e) => setFormData({...formData, date: e.target.value})}
-                            className="w-full pl-10 border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                        />
-                     </div>
-                 </div>
-                 <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">Montant (DH)</label>
-                     <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                        <input
-                            type="number"
-                            step="0.01"
-                            required
-                            value={formData.montant}
-                            onChange={(e) => setFormData({...formData, montant: parseFloat(e.target.value)})}
-                            className="w-full pl-10 border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition-colors font-semibold text-gray-900"
-                        />
-                     </div>
-                 </div>
-             </div>
-
-             <div className="pt-6">
-                 <button
-                    type="submit"
-                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all hover:scale-[1.02]"
-                 >
-                    <Save className="w-5 h-5 mr-2" />
-                    {isCreating ? 'Enregistrer la facture' : 'Mettre à jour'}
-                 </button>
-             </div>
-         </form>
-
-         {!isCreating && invoice && (
-            <div className="mt-8 pt-6 border-t border-gray-100">
-                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Informations Système</h4>
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
-                    <div>
-                        <dt className="text-gray-500">ID Unique</dt>
-                        <dd className="font-mono text-gray-900">#{invoice.id_invoice}</dd>
-                    </div>
-                    <div>
-                        <dt className="text-gray-500">Créé le</dt>
-                        <dd className="text-gray-900">{new Date().toLocaleDateString()}</dd>
-                    </div>
-                </dl>
-            </div>
-         )}
-      </div>
-    </div>
-  );
-};
+interface Document {
+    id_document: number;
+    name: string;
+    type_document: string;
+    created_at: string;
+    file_url: string;
+    project: number;
+}
 
 export const Invoices = () => {
-  const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+    const [activeTab, setActiveTab] = useState<'create' | 'history'>('create');
+    const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
+    const [invoiceNumber, setInvoiceNumber] = useState('');
+    const [bcNumber, setBcNumber] = useState('');
 
-  // Fetch Data
-  const { data: invoices = [], isLoading } = useQuery<Invoice[]>('invoices', async () => {
-    const response = await api.get('/invoices/');
-    return response.data.results || response.data;
-  });
+    // Fetch Quotes (All)
+    const { data: quotes = [] } = useQuery<Quote[]>('quotes', async () => {
+        const response = await api.get('/quotes/'); 
+        return response.data.results || response.data;
+    });
 
-  const { data: projects = [] } = useQuery<Project[]>('projects', async () => {
-    const response = await api.get('/projects/');
-    return response.data.results || response.data;
-  });
+    // Fetch Documents for History
+    const { data: documents = [], isLoading: isLoadingHistory } = useQuery<Document[]>('documents', async () => {
+        const response = await api.get('/documents/');
+        return response.data.results || response.data;
+    }, {
+        enabled: activeTab === 'history'
+    });
 
-  const deleteMutation = useMutation(
-    (id: number) => api.delete(`/invoices/${id}/`),
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries('invoices');
-        if (selectedId === id) setSelectedId(null);
-      },
-    }
-  );
+    // Filter Documents for "Facture"
+    const invoices = useMemo(() => {
+        return documents.filter((doc: Document) => 
+            doc.name.toLowerCase().includes('facture') || 
+            doc.name.toLowerCase().startsWith('fac')
+        ).sort((a: Document, b: Document) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }, [documents]);
 
-  // Derived State
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter(inv => 
-      inv.fournisseur.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.id_invoice.toString().includes(searchTerm) ||
-      projects.find(p => p.id_project === inv.project)?.nom_projet.toLowerCase().includes(searchTerm.toLowerCase())
+    // Fetch Preview Lines (Same as Delivery Logic)
+    const { data: lines = [], isLoading: isLoadingLines } = useQuery<DeliveryLine[]>(
+        ['delivery-preview', selectedQuoteId], 
+        async () => {
+             if (!selectedQuoteId) return [];
+             const response = await api.get(`/quotes/${selectedQuoteId}/delivery-preview/`);
+             return response.data;
+        },
+        { enabled: !!selectedQuoteId }
     );
-  }, [invoices, searchTerm, projects]);
 
-  const stats = useMemo(() => {
-    const total = invoices.reduce((acc, curr) => acc + curr.montant, 0);
-    const count = invoices.length;
-    const avg = count > 0 ? total / count : 0;
-    return { total, count, avg };
-  }, [invoices]);
+    // Generate PDF (Invoice)
+    const generateMutation = useMutation(
+        async (id: number) => {
+            const response = await api.post(`/quotes/${id}/generate-invoice/`, {
+                invoice_number: invoiceNumber,
+                bc_number: bcNumber
+            }, {
+                responseType: 'blob'
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            const quote = quotes.find(q => q.id_quote === id);
+            link.setAttribute('download', `Facture_${quote?.numero_devis || 'document'}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        },
+        {
+            onSuccess: () => {
+                alert('Facture générée et enregistrée dans les documents.');
+                setActiveTab('history');
+            },
+            onError: (err: any) => {
+                console.error("Error generating Invoice PDF", err);
+                const msg = err.response?.data?.error || err.message || 'Erreur inconnue';
+                alert('Erreur lors de la génération de la facture: ' + msg);
+            }
+        }
+    );
 
-  const selectedInvoice = invoices.find(i => i.id_invoice === selectedId) || null;
+    const handleSelectQuote = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedQuoteId(Number(e.target.value));
+    };
 
-  return (
-    <div className="flex h-[calc(100vh-theme(spacing.24))] overflow-hidden bg-gray-100 -m-6 p-6">
-      {/* Left Panel: List & Stats */}
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 pr-0 ${selectedId || isCreating ? 'mr-4' : ''}`}>
-        
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-            <div>
-                <h1 className="text-2xl font-bold text-gray-800 flex items-center">
-                    <Receipt className="w-8 h-8 mr-3 text-blue-600" />
-                    Gestion des Factures
-                </h1>
-                <p className="text-sm text-gray-500 mt-1">Suivi des paiements fournisseurs et dépenses projets</p>
+    const selectedQuote = useMemo(() => 
+        quotes.find(q => q.id_quote === selectedQuoteId), 
+    [quotes, selectedQuoteId]);
+
+    const formatCurrency = (val: number) => {
+        return new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD' }).format(val);
+    };
+
+    return (
+        <div className="space-y-6">
+            {/* Header with Tabs */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-800 flex items-center">
+                        <Receipt className="mr-3 text-blue-600" /> Gestion des Factures
+                    </h1>
+                    <p className="text-gray-500 mt-1 ml-9">Générez et suivez vos factures clients.</p>
+                </div>
+                
+                <div className="flex p-1 bg-gray-100 rounded-lg">
+                    <button
+                        onClick={() => setActiveTab('create')}
+                        className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                            activeTab === 'create' 
+                                ? 'bg-white text-blue-600 shadow-sm' 
+                                : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Nouvelle Facture
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('history')}
+                         className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                            activeTab === 'history' 
+                                ? 'bg-white text-blue-600 shadow-sm' 
+                                : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                        <History className="w-4 h-4 mr-2" />
+                        Historique
+                    </button>
+                </div>
             </div>
-            <button
-                onClick={() => {
-                    setSelectedId(null);
-                    setIsCreating(true);
-                }}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition-transform hover:scale-105 active:scale-95"
-            >
-                <Plus className="w-5 h-5 mr-2" />
-                Nouvelle Facture
-            </button>
-        </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                 <div className="flex items-center justify-between">
-                     <div>
-                         <p className="text-sm font-medium text-gray-500">Dépenses Totales</p>
-                         <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total.toLocaleString()} DH</p>
-                     </div>
-                     <div className="p-3 rounded-full bg-blue-50 text-blue-600">
-                         <DollarSign className="w-6 h-6" />
-                     </div>
-                 </div>
-             </div>
-             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                 <div className="flex items-center justify-between">
-                     <div>
-                         <p className="text-sm font-medium text-gray-500">Nombre de Factures</p>
-                         <p className="text-2xl font-bold text-gray-900 mt-1">{stats.count}</p>
-                     </div>
-                     <div className="p-3 rounded-full bg-indigo-50 text-indigo-600">
-                         <FileText className="w-6 h-6" />
-                     </div>
-                 </div>
-             </div>
-             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                 <div className="flex items-center justify-between">
-                     <div>
-                         <p className="text-sm font-medium text-gray-500">Moyenne par Facture</p>
-                         <p className="text-2xl font-bold text-gray-900 mt-1">{stats.avg.toLocaleString(undefined, { maximumFractionDigits: 0 })} DH</p>
-                     </div>
-                     <div className="p-3 rounded-full bg-green-50 text-green-600">
-                         <ArrowUpRight className="w-6 h-6" />
-                     </div>
-                 </div>
-             </div>
-        </div>
-
-        {/* Search & Filter Bar */}
-        <div className="bg-white p-4 rounded-t-xl border-b border-gray-100 flex items-center justify-between">
-            <div className="relative max-w-md w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input 
-                    type="text" 
-                    placeholder="Rechercher par fournisseur, projet..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                />
-            </div>
-            <div className="flex items-center text-sm text-gray-500">
-                <Filter className="w-4 h-4 mr-2" />
-                {filteredInvoices.length} résultat(s)
-            </div>
-        </div>
-
-        {/* Invoices List */}
-        <div className="bg-white rounded-b-xl shadow-sm overflow-hidden flex-1 relative">
-            <div className="absolute inset-0 overflow-y-auto">
-                {isLoading ? (
-                    <div className="flex justify-center items-center h-full text-gray-400">
-                        Chargement des factures...
-                    </div>
-                ) : filteredInvoices.length === 0 ? (
-                    <div className="flex flex-col justify-center items-center h-full text-gray-400">
-                        <Receipt className="w-16 h-16 mb-4 opacity-20" />
-                        <p>Aucune facture trouvée</p>
-                    </div>
-                ) : (
-                    <table className="min-w-full divide-y divide-gray-100">
-                        <thead className="bg-gray-50 sticky top-0">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Fournisseur</th>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Projet</th>
-                                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Montant</th>
-                                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-100">
-                            {filteredInvoices.map((invoice) => (
-                                <tr 
-                                    key={invoice.id_invoice}
-                                    onClick={() => {
-                                        setIsCreating(false);
-                                        setSelectedId(invoice.id_invoice);
-                                    }}
-                                    className={`cursor-pointer transition-colors group ${selectedId === invoice.id_invoice ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
-                                >
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="flex items-center">
-                                            <div className={`p-2 rounded-lg mr-3 ${selectedId === invoice.id_invoice ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200'}`}>
-                                                <Building className="w-4 h-4" />
-                                            </div>
-                                            <span className="font-medium text-gray-900">{invoice.fournisseur}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                            {projects.find(p => p.id_project === invoice.project)?.nom_projet}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                                        {new Date(invoice.date).toLocaleDateString()}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                                        <span className="font-bold text-gray-900">{invoice.montant.toLocaleString()} DH</span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if(confirm('Supprimer cette facture ?')) deleteMutation.mutate(invoice.id_invoice);
-                                            }}
-                                            className="text-gray-400 hover:text-red-500 p-2 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
+            {/* Content Area */}
+            {activeTab === 'create' ? (
+                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Left Panel: Selection */}
+                    <div className="lg:col-span-1 space-y-6">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                <FileText className="w-5 h-5 mr-2 text-gray-500" /> Source
+                            </h2>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Sélectionner un Devis Validé</label>
+                                    <div className="relative">
+                                        <select 
+                                            className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                                            onChange={handleSelectQuote}
+                                            value={selectedQuoteId || ''}
                                         >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-        </div>
-      </div>
+                                            <option value="">-- Choisir un devis --</option>
+                                            {quotes.map((quote) => (
+                                                <option key={quote.id_quote} value={quote.id_quote}>
+                                                    {quote.numero_devis} {quote.objet ? `- ${quote.objet}` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                                           <ChevronRight className="w-4 h-4 text-gray-400 rotate-90" />
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-2">
+                                        La facture sera générée à partir du devis sélectionné.
+                                    </p>
+                                </div>
 
-      {/* Right Panel: Detail View */}
-      <div 
-        className={`bg-white shadow-2xl transition-all duration-300 ease-in-out transform border-l border-gray-200 ${
-            (selectedId || isCreating) ? 'w-[400px] translate-x-0' : 'w-0 translate-x-full opacity-0 overflow-hidden'
-        }`}
-      >
-        {(selectedId || isCreating) && (
-             <InvoiceDetailsPanel 
-                invoice={selectedInvoice}
-                projects={projects}
-                isCreating={isCreating}
-                onClose={() => {
-                    setSelectedId(null);
-                    setIsCreating(false);
-                }}
-             />
-        )}
-      </div>
-    </div>
-  );
+                                {selectedQuote && (
+                                    <div className="space-y-4 pt-4 border-t border-gray-100">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">N° Facture</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                placeholder="Saisir le N° Facture..."
+                                                value={invoiceNumber}
+                                                onChange={(e) => setInvoiceNumber(e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">N° Bon de Commande</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                placeholder="Saisir le N° BC..."
+                                                value={bcNumber}
+                                                onChange={(e) => setBcNumber(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {selectedQuote && (
+                                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                        <h3 className="text-sm font-semibold text-blue-800 mb-2">Détails du Devis</h3>
+                                        <div className="space-y-2 text-sm text-blue-700">
+                                            <div className="flex justify-between">
+                                                <span>Numéro:</span>
+                                                <span className="font-medium">{selectedQuote.numero_devis}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span>Date Devis:</span>
+                                                <span>{selectedQuote.date_livraison ? new Date(selectedQuote.date_livraison).toLocaleDateString() : '-'}</span>
+                                            </div>
+                                            <div className="pt-2 border-t border-blue-200 mt-2">
+                                                <p className="font-medium truncate">{selectedQuote.objet || 'Sans objet'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Panel: Preview */}
+                    <div className="lg:col-span-2">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-full flex flex-col">
+                            <div className="p-6 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+                                <h2 className="text-lg font-semibold text-gray-800">Aperçu du contenu</h2>
+                                {lines.length > 0 && !isLoadingLines && (
+                                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
+                                        {lines.length} articles
+                                    </span>
+                                )}
+                            </div>
+                            
+                            <div className="flex-1 p-6">
+                                {isLoadingLines ? (
+                                    <div className="h-40 flex items-center justify-center text-gray-500">
+                                        Chargement de l'aperçu...
+                                    </div>
+                                ) : !selectedQuoteId ? (
+                                    <div className="h-64 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
+                                        <FileText className="w-12 h-12 mb-4 opacity-50" />
+                                        <p>Veuillez sélectionner un devis pour voir l'aperçu</p>
+                                    </div>
+                                ) : lines.length === 0 ? (
+                                    <div className="p-8 text-center text-gray-500 bg-yellow-50 rounded-lg">
+                                        <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-500" />
+                                        Aucun article trouvé pour ce devis.
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left">
+                                            <thead>
+                                                <tr className="border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                                    <th className="py-3 px-2">Désignation</th>
+                                                    <th className="py-3 px-2 text-center">Quantité</th>
+                                                    <th className="py-3 px-2 text-right">P.U (HT)</th>
+                                                    <th className="py-3 px-2 text-right">Total (HT)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {lines.map((line, idx) => (
+                                                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                                        <td className="py-3 px-2 text-sm text-gray-900 font-medium">{line.designation}</td>
+                                                        <td className="py-3 px-2 text-sm text-center text-gray-600">{line.quantite}</td>
+                                                        <td className="py-3 px-2 text-sm text-right text-gray-600">{formatCurrency(line.prix_unitaire)}</td>
+                                                        <td className="py-3 px-2 text-sm text-right text-gray-900 font-medium">
+                                                            {formatCurrency(line.quantite * line.prix_unitaire)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                            <tfoot className="bg-gray-50">
+                                                <tr>
+                                                    <td colSpan={3} className="py-3 px-4 text-right font-bold text-gray-700">Total HT Estimé:</td>
+                                                    <td className="py-3 px-2 text-right font-bold text-blue-600">
+                                                        {formatCurrency(lines.reduce((acc, l) => acc + (l.quantite * l.prix_unitaire), 0))}
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Action Footer */}
+                            <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end">
+                                <button
+                                    onClick={() => selectedQuoteId && generateMutation.mutate(selectedQuoteId)}
+                                    className={`flex items-center px-6 py-3 rounded-lg font-medium text-white shadow-sm transition-all ${
+                                        !selectedQuoteId || isLoadingLines || lines.length === 0
+                                        ? 'bg-gray-300 cursor-not-allowed'
+                                        : 'bg-green-600 hover:bg-green-700 hover:shadow-md'
+                                    }`}
+                                    disabled={!selectedQuoteId || isLoadingLines || lines.length === 0 || generateMutation.isLoading}
+                                >
+                                    {generateMutation.isLoading ? (
+                                        <>Génération en cours...</>
+                                    ) : (
+                                        <>
+                                            <Printer className="w-5 h-5 mr-2" />
+                                            Générer la Facture
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                 </div>
+            ) : (
+                // History Tab
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50 border-b border-gray-100">
+                                <tr>
+                                    <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Document</th>
+                                    <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Date création</th>
+                                    <th className="p-4 font-semibold text-gray-600 text-sm uppercase tracking-wider text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {isLoadingHistory ? (
+                                    <tr><td colSpan={3} className="p-8 text-center text-gray-500">Chargement de l'historique...</td></tr>
+                                ) : invoices.length === 0 ? (
+                                    <tr><td colSpan={3} className="p-12 text-center">
+                                        <div className="flex flex-col items-center justify-center text-gray-400">
+                                            <History className="w-12 h-12 mb-3 opacity-20" />
+                                            <p>Aucune facture générée pour le moment.</p>
+                                        </div>
+                                    </td></tr>
+                                ) : (
+                                    invoices.map((doc) => (
+                                        <tr key={doc.id_document} className="hover:bg-blue-50/50 transition-colors group">
+                                            <td className="p-4">
+                                                <div className="flex items-center">
+                                                    <div className="p-2 bg-purple-100 text-purple-600 rounded-lg mr-3">
+                                                        <FileText className="w-5 h-5" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-semibold text-gray-900">{doc.name}</p>
+                                                        <p className="text-xs text-gray-500">PDF • Projet #{doc.project}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="p-4 text-sm text-gray-600">
+                                                <div className="flex items-center">
+                                                    <Calendar className="w-4 h-4 mr-2 text-gray-400" />
+                                                    {new Date(doc.created_at).toLocaleDateString()} {new Date(doc.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                </div>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <a 
+                                                    href={doc.file_url} 
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-gray-200 text-gray-400 hover:text-blue-600 hover:border-blue-200 transition-colors"
+                                                    title="Télécharger"
+                                                >
+                                                    <Download className="w-4 h-4" />
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 };

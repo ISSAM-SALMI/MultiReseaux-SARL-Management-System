@@ -16,6 +16,7 @@ from django.conf import settings
 import os
 import io
 from decimal import Decimal
+from datetime import datetime
 
 class QuoteViewSet(BaseViewSet):
     queryset = Quote.objects.all()
@@ -26,6 +27,12 @@ class QuoteViewSet(BaseViewSet):
     def generate_pdf(self, request, pk=None):
         quote = self.get_object()
         buffer = io.BytesIO()
+        
+        # Colors
+        COLOR_PRIMARY = colors.HexColor('#0095C8') # Blue
+        COLOR_SECONDARY = colors.HexColor('#D01C2B') # Red
+        COLOR_TEXT = colors.HexColor('#2c3e50')
+        COLOR_LIGHT_GRAY = colors.HexColor('#f8f9fa')
         
         # Document Setup
         doc = SimpleDocTemplate(
@@ -38,93 +45,71 @@ class QuoteViewSet(BaseViewSet):
         styles = getSampleStyleSheet()
         
         # Custom Styles
-        title_style = styles['Title']
-        title_style.alignment = 1 # Center
-        
-        header_style = styles['Heading2']
-        header_style.textColor = colors.HexColor('#2c3e50')
-        
         normal_style = styles['Normal']
         normal_style.fontSize = 10
+        normal_style.textColor = COLOR_TEXT
         
         # Calculate available width
-        available_width = A4[0] - 60 # 30 margin each side
+        available_width = A4[0] - 60 
 
-        # --- Header Image ---
+        # --- 1. Header (Image) ---
         header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
         if os.path.exists(header_path):
             try:
                 img_reader = ImageReader(header_path)
                 iw, ih = img_reader.getSize()
                 aspect = ih / float(iw)
-                target_width = available_width * 0.6 # Make it smaller (60% width)
+                # Keep logo professional size
+                target_width = available_width * 0.6
                 target_height = target_width * aspect
-                # hAlign='CENTER' centers the image
                 elements.append(Image(header_path, width=target_width, height=target_height, hAlign='CENTER'))
-                elements.append(Spacer(1, 15))
+                elements.append(Spacer(1, 20))
             except Exception as e:
                 print(f"Error loading header image: {e}")
-
-        # --- Header Section (Text) ---
-        # Company Info (Left) vs Quote Info (Right)
-        # Only show company info if header image is NOT present? 
-        # Requirement: "Elle doit être affichée avant le contenu du devis".
-        # Usually if there is a graphical header, we might skip the text "MULTI RESEAUX SARL", but keep the Quote Info.
-        # User said: "entete.png représente l’entête officielle... apparaître avant le contenu". 
-        # I will keep the text info below it as it contains specific data not always in a static image (like Quote #).
         
-        company_info = [
-            Paragraph("<b>MULTI RESEAUX SARL</b>", styles['Heading3']),
-            # Paragraph("Adresse: 123 Rue Example", normal_style), # Maybe redundant if in image
+        # --- 2. Info Block (2 Columns) ---
+        client = quote.project.client if quote.project else None
+        
+        # Left Column Data
+        # Date du devis (date actuelle or date_livraison as per logic)
+        formatted_date = quote.date_livraison.strftime('%d/%m/%Y') if quote.date_livraison else datetime.now().strftime('%d/%m/%Y')
+        info_left = [
+            Paragraph(f"<b>Date :</b> {formatted_date}", normal_style),
+            Paragraph(f"<b>Devis N° :</b> {quote.numero_devis}", normal_style),
+            Paragraph(f"<b>Objet :</b> {quote.objet}", normal_style)
         ]
         
-        client_name = quote.project.client.nom_client if quote.project and quote.project.client else "Client Inconnu"
-        project_name = quote.project.nom_projet if quote.project else "Projet Inconnu"
+        # Right Column Data
+        client_name = client.nom_client if client else "Client Inconnu"
+        client_address = client.adresse if client and client.adresse else ""
+        client_ice = client.ice if client and client.ice else ""
         
-        quote_info = [
-            Paragraph(f"<b>DEVIS N°: {quote.numero_devis}</b>", styles['Heading3']),
-            Paragraph(f"Date: {quote.date_livraison}", normal_style),
-            Paragraph(f"Client: <b>{client_name}</b>", normal_style),
-            Paragraph(f"Projet: {project_name}", normal_style),
+        info_right = [
+            Paragraph(f"<b>Client :</b> {client_name}", normal_style),
         ]
+        if client_address:
+             info_right.append(Paragraph(f"Adresse : {client_address}", normal_style))
+        if client_ice:
+             info_right.append(Paragraph(f"ICE : {client_ice}", normal_style))
+             
+        # Create Table for Info Block
+        info_data = [[info_left, info_right]]
         
-        # If image exists, maybe we simplify the company info text or keep it.
-        # I'll keep the layout but maybe reduced.
-        # Let's keep the original layout for robustness.
-        
-        header_text_data = [
-            [
-                # Left Column (Company) - Simplified if header exists, or full.
-                # Let's keep full for now as per "entete.png represents header" might just mean logo + branding. 
-                # If the image CONTAINS the address, this is redundant. 
-                # But safer to keep it.
-                [Paragraph("<b>MULTI RESEAUX SARL</b>", styles['Heading3'])], 
-                
-                # Right Column (Quote Info)
-                quote_info
-            ]
-        ]
-        
-        header_table = Table(header_text_data, colWidths=[250, 250])
-        header_table.setStyle(TableStyle([
+        info_table = Table(info_data, colWidths=[available_width/2, available_width/2])
+        info_table.setStyle(TableStyle([
             ('VALIGN', (0,0), (-1,-1), 'TOP'),
-            ('LEFTPADDING', (0,0), (-1,-1), 0),
-            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('LEFTPADDING', (0,0), (0,0), 0),   # Left col padding
+            ('LEFTPADDING', (1,0), (1,0), 20),  # Right col padding
         ]))
-        elements.append(header_table)
-        elements.append(Spacer(1, 40)) # Espace professionnel augmenté
-        
-        # --- Object Section ---
-        elements.append(Paragraph(f"<b>Objet :</b> {quote.objet}", normal_style))
-        elements.append(Spacer(1, 15))
+        elements.append(info_table)
+        elements.append(Spacer(1, 20))
 
-        # --- Lines Table ---
-        # Columns: Designation (Wide), Qté, PU, Montant
-        data = [['Désignation', 'Qté', 'P.U. (DH)', 'Montant HT (DH)']]
+        # --- 3. Quote Table ---
+        data = [['Désignation', 'Qté', 'P.U. (DH)', 'Total (DH)']]
         
         for line in quote.lines.all():
             data.append([
-                Paragraph(line.designation, normal_style), # Wrap text
+                Paragraph(line.designation, normal_style),
                 str(line.quantite),
                 f"{line.prix_unitaire:,.2f}",
                 f"{line.montant_ht:,.2f}"
@@ -136,27 +121,26 @@ class QuoteViewSet(BaseViewSet):
         t = Table(data, colWidths=col_widths)
         t.setStyle(TableStyle([
             # Header Row
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('BACKGROUND', (0, 0), (-1, 0), COLOR_PRIMARY),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('TOPPADDING', (0, 0), (-1, 0), 10),
             
             # Data Rows
             ('ALIGN', (1, 1), (-1, -1), 'RIGHT'), # Numbers right aligned
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdc3c7')), # Fine borders
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_LIGHT_GRAY]),
         ]))
         elements.append(t)
-        elements.append(Spacer(1, 10))
+        elements.append(Spacer(1, 15))
 
-        # --- Totals Section ---
-        # Right aligned table for totals
+        # --- 4. Totals Section ---
         total_ht = float(quote.total_ht)
         tva_amount = total_ht * (float(quote.tva) / 100)
         total_ttc = float(quote.total_ttc)
@@ -167,51 +151,58 @@ class QuoteViewSet(BaseViewSet):
             ['Total TTC', f"{total_ttc:,.2f} DH"]
         ]
         
-        totals_table = Table(totals_data, colWidths=[100, 100])
+        totals_table = Table(totals_data, colWidths=[100, 120])
         totals_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('LINEABOVE', (0, 2), (-1, 2), 1, colors.black), # Line above Total TTC
-            ('TEXTCOLOR', (0, 2), (-1, 2), colors.HexColor('#2c3e50')), # Total TTC color
-            ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#e9ecef')), # Total TTC background
+            ('TEXTCOLOR', (0, 0), (-1, -1), COLOR_TEXT),
+            
+            # Total TTC Highlight
+            ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_SECONDARY), # Red text
+            ('FONTSIZE', (0, 2), (-1, 2), 11),
+            ('LINEABOVE', (0, 2), (-1, 2), 1, COLOR_PRIMARY), 
+            ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ecf0f1')),
+            
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ]))
         
         # Place totals table to the right
-        main_totals_table = Table([[None, totals_table]], colWidths=[available_width - 210, 210])
+        main_totals_table = Table([[None, totals_table]], colWidths=[available_width - 220, 220])
         elements.append(main_totals_table)
         
         elements.append(Spacer(1, 30))
         
-        # --- Footer / Signature ---
+        # --- 5. Footer / Signature ---
         elements.append(Paragraph(f"Arrêté le présent devis à la somme de : <b>{total_ttc:,.2f} Dirhams TTC</b>", normal_style))
         elements.append(Spacer(1, 30))
         
         # Signature Image Preparation
+        # "Ajouter uniquement la signature du prestataire ... Positionnée en bas à droite"
         signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'signature.jpeg')
-        signature_img = None
+        signature_content = [Paragraph("<b>Signature</b>", styles['Normal'])]
+        
         if os.path.exists(signature_path):
             try:
                 sig_reader = ImageReader(signature_path)
                 sw, sh = sig_reader.getSize()
                 s_aspect = sh / float(sw)
-                s_target_width = 120 # Reasonable width for signature
+                s_target_width = 120 
                 s_target_height = s_target_width * s_aspect
-                signature_img = Image(signature_path, width=s_target_width, height=s_target_height)
+                signature_content.append(Image(signature_path, width=s_target_width, height=s_target_height))
             except Exception as e:
                 print(f"Error loading signature: {e}")
 
+        # Table for signature at bottom right
         signature_data_table = [
-            ['Signature Client', 'Signature Entreprise'],
-            ['', signature_img if signature_img else '']
+            [None, signature_content]
         ]
         
-        signature_table = Table(signature_data_table, colWidths=[available_width/2, available_width/2])
+        signature_table = Table(signature_data_table, colWidths=[available_width - 150, 150])
         signature_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (1, 0), (1, 0), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), # Header row bold
-            ('TOPPADDING', (0, 1), (-1, 1), 10), # Padding above signature image
         ]))
         elements.append(signature_table)
 
@@ -273,16 +264,50 @@ class QuoteViewSet(BaseViewSet):
     def generate_delivery_note(self, request, pk=None):
         try:
             quote = self.get_object()
+            
+            # Get inputs
+            bl_number = request.data.get('bl_number')
+            bc_number = request.data.get('bc_number')
+            
+            # Find existing tracking or create new one
             tracking = QuoteTracking.objects.filter(quote=quote).order_by('-created_at').first()
             
-            lines = []
-            if tracking:
-                lines = tracking.lines.all()
+            if not tracking:
+                # Create new tracking if none exists to ensure we have a source of truth for the BL
+                tracking = QuoteTracking.objects.create(
+                    quote=quote,
+                    bl_number=bl_number,
+                    bc_number=bc_number
+                )
+                # Copy lines from quote to tracking
+                for line in quote.lines.all():
+                    QuoteTrackingLine.objects.create(
+                        tracking=tracking,
+                        designation=line.designation,
+                        quantite=line.quantite,
+                        prix_unitaire=line.prix_unitaire
+                    )
             else:
-                lines = quote.lines.all()
+                # Update existing tracking
+                if bl_number: tracking.bl_number = bl_number
+                if bc_number: tracking.bc_number = bc_number
+                tracking.save()
+
+            # Determine values to display
+            display_bl_number = tracking.bl_number if tracking.bl_number else f"BL-{quote.numero_devis}"
+            display_bc_number = tracking.bc_number if tracking.bc_number else ""
+            
+            # Use tracking lines as the source of truth
+            lines = tracking.lines.all()
 
             buffer = io.BytesIO()
             
+            # Colors
+            COLOR_PRIMARY = colors.HexColor('#0095C8') # Blue
+            COLOR_SECONDARY = colors.HexColor('#D01C2B') # Red
+            COLOR_TEXT = colors.HexColor('#2c3e50')
+            COLOR_LIGHT_GRAY = colors.HexColor('#f8f9fa')
+
             # Document Setup
             doc = SimpleDocTemplate(
                 buffer, 
@@ -293,18 +318,13 @@ class QuoteViewSet(BaseViewSet):
             elements = []
             styles = getSampleStyleSheet()
             
-            title_style = styles['Title']
-            title_style.alignment = 1 # Center
-            
-            header_style = styles['Heading2']
-            header_style.textColor = colors.HexColor('#2c3e50')
-            
             normal_style = styles['Normal']
             normal_style.fontSize = 10
+            normal_style.textColor = COLOR_TEXT
             
             available_width = A4[0] - 60 
 
-            # --- Header Image ---
+            # --- 1. Header (Image) ---
             header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
             if os.path.exists(header_path):
                 try:
@@ -314,120 +334,166 @@ class QuoteViewSet(BaseViewSet):
                     target_width = available_width * 0.6
                     target_height = target_width * aspect
                     elements.append(Image(header_path, width=target_width, height=target_height, hAlign='CENTER'))
-                    elements.append(Spacer(1, 15))
+                    elements.append(Spacer(1, 20))
                 except Exception as e:
                     print(f"Error loading header image: {e}")
 
-            client_name = quote.project.client.nom_client if quote.project and quote.project.client else "Client Inconnu"
-            project_name = quote.project.nom_projet if quote.project else "Projet Inconnu"
+            # --- 2. Info Block (2 Columns) ---
+            client = quote.project.client if quote.project else None
             
-            # Header Info
-            header_table_data = [
-                [
-                    # Left
-                    [Paragraph("<b>MULTI RESEAUX SARL</b>", styles['Heading3'])],
-                    # Right
-                    [
-                        Paragraph(f"<b>BON DE LIVRAISON</b>", styles['Heading3']),
-                        Paragraph(f"Réf Devis: {quote.numero_devis}", normal_style),
-                        Paragraph(f"Date: {quote.date_livraison}", normal_style),
-                        Paragraph(f"Client: <b>{client_name}</b>", normal_style),
-                        Paragraph(f"Projet: {project_name}", normal_style),
-                    ]
-                ]
+            # Left Column: Date, N° BL, N° BC, Objet
+            current_date_str = datetime.now().strftime('%d/%m/%Y')
+            
+            info_left = [
+                Paragraph(f"<b>Date :</b> {current_date_str}", normal_style),
+                Paragraph(f"<b>N° BL :</b> {display_bl_number}", normal_style),
             ]
+            if display_bc_number:
+                info_left.append(Paragraph(f"<b>N° BC :</b> {display_bc_number}", normal_style))
+                
+            info_left.append(Paragraph(f"<b>Objet :</b> {quote.objet}", normal_style))
             
-            header_table = Table(header_table_data, colWidths=[available_width*0.5, available_width*0.5])
-            header_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            # Right Column: Client, Address, ICE
+            client_name = client.nom_client if client else "Client Inconnu"
+            client_address = client.adresse if client and client.adresse else ""
+            client_ice = client.ice if client and client.ice else ""
+            
+            info_right = [
+                Paragraph(f"<b>Client :</b> {client_name}", normal_style),
+            ]
+            if client_address:
+                 info_right.append(Paragraph(f"Adresse : {client_address}", normal_style))
+            if client_ice:
+                 info_right.append(Paragraph(f"ICE : {client_ice}", normal_style))
+             
+            # Create Table for Info Block
+            info_data = [[info_left, info_right]]
+            
+            info_table = Table(info_data, colWidths=[available_width/2, available_width/2])
+            info_table.setStyle(TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                ('LEFTPADDING', (0,0), (0,0), 0),   # Left col padding
+                ('LEFTPADDING', (1,0), (1,0), 20),  # Right col padding
             ]))
-            elements.append(header_table)
+            elements.append(info_table)
             elements.append(Spacer(1, 20))
-
-            # Title
-            elements.append(Paragraph("BON DE LIVRAISON", title_style))
-            elements.append(Paragraph(f"Objet: {quote.objet}", normal_style))
-            elements.append(Spacer(1, 20))
-
-            # Table Lines
-            table_data = [['Désignation', 'Qté', 'P.U (Dhs)', 'Total HT (Dhs)']]
+            
+            # --- 3. Delivery Table ---
+            # Columns: Désignation, Quantité, P.U (HT), Total (HT)
+            data = [['Désignation', 'Qté', 'P.U (HT)', 'Total (HT)']]
+            
             total_ht_calc = 0
             for line in lines:
-                line_total = line.quantite * line.prix_unitaire
-                total_ht_calc += line_total
-                table_data.append([
+                montant_ht = line.quantite * line.prix_unitaire
+                total_ht_calc += montant_ht
+                data.append([
                     Paragraph(line.designation, normal_style),
                     str(line.quantite),
                     f"{line.prix_unitaire:,.2f}",
-                    f"{line_total:,.2f}"
+                    f"{montant_ht:,.2f}"
                 ])
-                
-            t_lines = Table(table_data, colWidths=[available_width*0.5, available_width*0.15, available_width*0.15, available_width*0.2])
-            t_lines.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#ecf0f1')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('ALIGN', (1, 1), (-1, -1), 'CENTER'), # Qty Center
-                ('ALIGN', (2, 1), (-1, -1), 'RIGHT'), # Prices Right
+            
+            # Table Styling
+            col_widths = [available_width * 0.55, available_width * 0.1, available_width * 0.15, available_width * 0.2]
+            
+            t = Table(data, colWidths=col_widths)
+            t.setStyle(TableStyle([
+                # Header Row
+                ('BACKGROUND', (0, 0), (-1, 0), COLOR_PRIMARY),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#bdc3c7')),
-                ('PADDING', (0, 0), (-1, -1), 6),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+                ('TOPPADDING', (0, 0), (-1, 0), 10),
+                
+                # Data Rows
+                ('ALIGN', (1, 1), (-1, -1), 'RIGHT'), # Numbers right aligned
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdc3c7')),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_LIGHT_GRAY]),
             ]))
-            elements.append(t_lines)
-            elements.append(Spacer(1, 20))
+            elements.append(t)
+            elements.append(Spacer(1, 15))
 
-            # Totals
-            tva = total_ht_calc * Decimal('0.2')
-            total_ttc = total_ht_calc + tva
-            total_data = [
-                ['Total HT', f"{total_ht_calc:,.2f} Dhs"],
-                ['TVA (20%)', f"{tva:,.2f} Dhs"],
-                ['Total TTC', f"{total_ttc:,.2f} Dhs"]
-            ]
+            # --- 4. Totals Section ---
+            tva_amount = total_ht_calc * (Decimal(quote.tva) / 100)
+            total_ttc = total_ht_calc + tva_amount
 
-            t_totals = Table(total_data, colWidths=[available_width*0.8, available_width*0.2])
-            t_totals.setStyle(TableStyle([
-                ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
-                ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'), # Last row Bold
-                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#bdc3c7')),
-                ('PADDING', (0, 0), (-1, -1), 6),
-            ]))
-            elements.append(t_totals)
-            elements.append(Spacer(1, 30))
-
-            # Signature
-            signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'signature.jpeg')
-            if not os.path.exists(signature_path):
-                 signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'signature.png')
-
-            signature_img = None
-            if os.path.exists(signature_path):
-                try:
-                    img_reader = ImageReader(signature_path)
-                    iw, ih = img_reader.getSize()
-                    aspect = ih / float(iw)
-                    width = 150 # Increased size
-                    height = width * aspect
-                    signature_img = Image(signature_path, width=width, height=height)
-                except Exception as e:
-                    print(f"Error loading signature: {e}")
-
-            signature_data_table = [
-                ['Signature Client', 'Signature Entreprise'],
-                ['', signature_img if signature_img else '']
+            totals_data = [
+                ['Total HT', f"{total_ht_calc:,.2f} DH"],
+                [f'TVA ({quote.tva}%)', f"{tva_amount:,.2f} DH"],
+                ['Total TTC', f"{total_ttc:,.2f} DH"]
             ]
             
-            signature_table = Table(signature_data_table, colWidths=[available_width/2, available_width/2])
-            signature_table.setStyle(TableStyle([
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('TOPPADDING', (0, 1), (-1, 1), 10),
+            totals_table = Table(totals_data, colWidths=[100, 120])
+            totals_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('TEXTCOLOR', (0, 0), (-1, -1), COLOR_TEXT),
+                
+                # Total TTC Highlight
+                ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_SECONDARY), # Red text
+                ('FONTSIZE', (0, 2), (-1, 2), 11),
+                ('LINEABOVE', (0, 2), (-1, 2), 1, COLOR_PRIMARY), 
+                ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ecf0f1')),
+                
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
             ]))
-            elements.append(signature_table)
+            
+            # Place totals table to the right
+            main_totals_table = Table([[None, totals_table]], colWidths=[available_width - 220, 220])
+            elements.append(main_totals_table)
+            elements.append(Spacer(1, 30))
+
+            # --- 5. Signature Section ---
+            
+            # Client Signature (Simple Text, No Box)
+            client_sig_text = [
+                Paragraph("<b>Signature du Client :</b>", normal_style),
+                Spacer(1, 40)
+            ]
+            
+            # No border table
+            client_sig_table = Table([[client_sig_text]], colWidths=[200])
+            client_sig_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 10),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ]))
+
+            # Provider Signature (Image)
+            provider_sig_content = [
+                Paragraph("<b>Signature du Prestataire :</b>", normal_style),
+                Spacer(1, 5)
+            ]
+            
+            signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'signature.jpeg')
+            if os.path.exists(signature_path):
+                try:
+                    sig_reader = ImageReader(signature_path)
+                    sw, sh = sig_reader.getSize()
+                    s_aspect = sh / float(sw)
+                    s_target_width = 120 
+                    s_target_height = s_target_width * s_aspect
+                    provider_sig_content.append(Image(signature_path, width=s_target_width, height=s_target_height))
+                except Exception as e:
+                    print(f"Error loading signature: {e}")
+            
+            # Layout: Client Left, Provider Right
+            sigs_data = [[client_sig_table, provider_sig_content]]
+            sigs_layout_table = Table(sigs_data, colWidths=[available_width/2, available_width/2])
+            sigs_layout_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),   # Client left
+                ('ALIGN', (1, 0), (1, 0), 'CENTER'), # Provider center
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (1, 0), (1, 0), 30), # Add some parsing for provider
+            ]))
+            elements.append(sigs_layout_table)
 
             def add_footer(canvas, doc):
                 canvas.saveState()
@@ -449,21 +515,305 @@ class QuoteViewSet(BaseViewSet):
             doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
             pdf_content = buffer.getvalue()
             buffer.seek(0)
+            
+            file_name = f"BL_{quote.numero_devis}.pdf"
+            if display_bl_number:
+                 # Sanitize filename
+                 safe_bl = "".join(c for c in display_bl_number if c.isalnum() or c in ('-','_'))
+                 file_name = f"BL_{safe_bl}.pdf"
 
-            # Save to Documents
             if quote.project:
-                file_name = f"BL_{quote.numero_devis}.pdf"
                 document = Document(
-                    name=f"Bon de Livraison - {quote.numero_devis}",
+                    name=f"Bon de Livraison {display_bl_number}",
                     type_document='PDF',
                     project=quote.project
                 )
                 document.file_url.save(file_name, ContentFile(pdf_content))
                 document.save()
-                
+            
             response = HttpResponse(buffer, content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="BL_{quote.numero_devis}.pdf"'
+            response['Content-Disposition'] = f'attachment; filename="{file_name}"'
             return response
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=400)
+
+
+    @action(detail=True, methods=['post'], url_path='generate-invoice')
+    def generate_invoice(self, request, pk=None):
+        try:
+            quote = self.get_object()
+            
+            # Get inputs
+            invoice_number = request.data.get('invoice_number')
+            bc_number = request.data.get('bc_number')
+            
+            # Find existing tracking or create new one
+            tracking = QuoteTracking.objects.filter(quote=quote).order_by('-created_at').first()
+            
+            if not tracking:
+                tracking = QuoteTracking.objects.create(
+                    quote=quote,
+                    invoice_number=invoice_number,
+                    bc_number=bc_number
+                )
+                for line in quote.lines.all():
+                    QuoteTrackingLine.objects.create(
+                        tracking=tracking,
+                        designation=line.designation,
+                        quantite=line.quantite,
+                        prix_unitaire=line.prix_unitaire
+                    )
+            else:
+                if invoice_number: tracking.invoice_number = invoice_number
+                if bc_number: tracking.bc_number = bc_number
+                tracking.save()
+
+            # Determine values to display
+            display_invoice_number = tracking.invoice_number if tracking.invoice_number else f"FACTURE-{quote.numero_devis}"
+            display_bc_number = tracking.bc_number if tracking.bc_number else ""
+            
+            # Use tracking lines as the source of truth
+            lines = tracking.lines.all()
+
+            buffer = io.BytesIO()
+            
+            # Colors
+            COLOR_PRIMARY = colors.HexColor('#0095C8') # Blue
+            COLOR_SECONDARY = colors.HexColor('#D01C2B') # Red
+            COLOR_TEXT = colors.HexColor('#2c3e50')
+            COLOR_LIGHT_GRAY = colors.HexColor('#f8f9fa')
+
+            # Document Setup
+            doc = SimpleDocTemplate(
+                buffer, 
+                pagesize=A4,
+                rightMargin=30, leftMargin=30, 
+                topMargin=5, bottomMargin=50 
+            )
+            elements = []
+            styles = getSampleStyleSheet()
+            
+            normal_style = styles['Normal']
+            normal_style.fontSize = 10
+            normal_style.textColor = COLOR_TEXT
+            
+            available_width = A4[0] - 60 
+
+            # --- 1. Header (Image) ---
+            header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
+            if os.path.exists(header_path):
+                try:
+                    img_reader = ImageReader(header_path)
+                    iw, ih = img_reader.getSize()
+                    aspect = ih / float(iw)
+                    target_width = available_width * 0.6
+                    target_height = target_width * aspect
+                    elements.append(Image(header_path, width=target_width, height=target_height, hAlign='CENTER'))
+                    elements.append(Spacer(1, 20))
+                except Exception as e:
+                    print(f"Error loading header image: {e}")
+
+            # --- 2. Info Block (2 Columns) ---
+            client = quote.project.client if quote.project else None
+            
+            # Left Column: Date, N° Facture, N° BC, Objet
+            current_date_str = datetime.now().strftime('%d/%m/%Y')
+            
+            info_left = [
+                Paragraph(f"<b>Date :</b> {current_date_str}", normal_style),
+                Paragraph(f"<b>N° Facture :</b> {display_invoice_number}", normal_style),
+            ]
+            if display_bc_number:
+                info_left.append(Paragraph(f"<b>N° BC :</b> {display_bc_number}", normal_style))
+                
+            info_left.append(Paragraph(f"<b>Objet :</b> {quote.objet}", normal_style))
+            
+            # Right Column: Client, Address, ICE
+            client_name = client.nom_client if client else "Client Inconnu"
+            client_address = client.adresse if client and client.adresse else ""
+            client_ice = client.ice if client and client.ice else ""
+            
+            info_right = [
+                Paragraph(f"<b>Client :</b> {client_name}", normal_style),
+            ]
+            if client_address:
+                 info_right.append(Paragraph(f"Adresse : {client_address}", normal_style))
+            if client_ice:
+                 info_right.append(Paragraph(f"ICE : {client_ice}", normal_style))
+             
+            # Create Table for Info Block
+            info_data = [[info_left, info_right]]
+            
+            info_table = Table(info_data, colWidths=[available_width/2, available_width/2])
+            info_table.setStyle(TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                ('LEFTPADDING', (0,0), (0,0), 0),   # Left col padding
+                ('LEFTPADDING', (1,0), (1,0), 20),  # Right col padding
+            ]))
+            elements.append(info_table)
+            elements.append(Spacer(1, 20))
+            
+            # --- 3. Delivery Table ---
+            # Columns: Désignation, Quantité, P.U (HT), Total (HT)
+            data = [['Désignation', 'Qté', 'P.U (HT)', 'Total (HT)']]
+            
+            total_ht_calc = 0
+            for line in lines:
+                montant_ht = line.quantite * line.prix_unitaire
+                total_ht_calc += montant_ht
+                data.append([
+                    Paragraph(line.designation, normal_style),
+                    str(line.quantite),
+                    f"{line.prix_unitaire:,.2f}",
+                    f"{montant_ht:,.2f}"
+                ])
+            
+            # Table Styling
+            col_widths = [available_width * 0.55, available_width * 0.1, available_width * 0.15, available_width * 0.2]
+            
+            t = Table(data, colWidths=col_widths)
+            t.setStyle(TableStyle([
+                # Header Row
+                ('BACKGROUND', (0, 0), (-1, 0), COLOR_PRIMARY),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+                ('TOPPADDING', (0, 0), (-1, 0), 10),
+                
+                # Data Rows
+                ('ALIGN', (1, 1), (-1, -1), 'RIGHT'), # Numbers right aligned
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdc3c7')),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_LIGHT_GRAY]),
+            ]))
+            elements.append(t)
+            elements.append(Spacer(1, 15))
+
+            # --- 4. Totals Section ---
+            tva_amount = total_ht_calc * (Decimal(quote.tva) / 100)
+            total_ttc = total_ht_calc + tva_amount
+
+            totals_data = [
+                ['Total HT', f"{total_ht_calc:,.2f} DH"],
+                [f'TVA ({quote.tva}%)', f"{tva_amount:,.2f} DH"],
+                ['Total TTC', f"{total_ttc:,.2f} DH"]
+            ]
+            
+            totals_table = Table(totals_data, colWidths=[100, 120])
+            totals_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('TEXTCOLOR', (0, 0), (-1, -1), COLOR_TEXT),
+                
+                # Total TTC Highlight
+                ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_SECONDARY), # Red text
+                ('FONTSIZE', (0, 2), (-1, 2), 11),
+                ('LINEABOVE', (0, 2), (-1, 2), 1, COLOR_PRIMARY), 
+                ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ecf0f1')),
+                
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            
+            # Place totals table to the right
+            main_totals_table = Table([[None, totals_table]], colWidths=[available_width - 220, 220])
+            elements.append(main_totals_table)
+            elements.append(Spacer(1, 30))
+
+             # --- 5. Signature Section ---
+             # Same as delivery notes: Client Simple, Provider Image
+            
+            # Client Signature (Simple Text, No Box)
+            client_sig_text = [
+                Paragraph("<b>Signature du Client :</b>", normal_style),
+                Spacer(1, 40)
+            ]
+            
+            # No border table
+            client_sig_table = Table([[client_sig_text]], colWidths=[200])
+            client_sig_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 10),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ]))
+
+            # Provider Signature (Image)
+            provider_sig_content = [
+                Paragraph("<b>Signature du Prestataire :</b>", normal_style),
+                Spacer(1, 5)
+            ]
+            
+            signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'signature.jpeg')
+            if os.path.exists(signature_path):
+                try:
+                    sig_reader = ImageReader(signature_path)
+                    sw, sh = sig_reader.getSize()
+                    s_aspect = sh / float(sw)
+                    s_target_width = 120 
+                    s_target_height = s_target_width * s_aspect
+                    provider_sig_content.append(Image(signature_path, width=s_target_width, height=s_target_height))
+                except Exception as e:
+                    print(f"Error loading signature: {e}")
+            
+            # Layout: Client Left, Provider Right
+            sigs_data = [[client_sig_table, provider_sig_content]]
+            sigs_layout_table = Table(sigs_data, colWidths=[available_width/2, available_width/2])
+            sigs_layout_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),   # Client left
+                ('ALIGN', (1, 0), (1, 0), 'CENTER'), # Provider center
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (1, 0), (1, 0), 30), # Add some parsing for provider
+            ]))
+            elements.append(sigs_layout_table)
+
+
+            def add_footer(canvas, doc):
+                canvas.saveState()
+                footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'footer.png')
+                if os.path.exists(footer_path):
+                    try:
+                        img_reader = ImageReader(footer_path)
+                        iw, ih = img_reader.getSize()
+                        aspect = ih / float(iw)
+                        target_width = A4[0] * 0.9 
+                        target_height = target_width * aspect
+                        x = (A4[0] - target_width) / 2
+                        y = 10
+                        canvas.drawImage(footer_path, x, y, width=target_width, height=target_height, mask='auto', preserveAspectRatio=True)
+                    except Exception as e:
+                        print(f"Error loading footer: {e}")
+                canvas.restoreState()
+
+            doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
+            pdf_content = buffer.getvalue()
+            buffer.seek(0)
+            
+            file_name = f"Facture_{display_invoice_number}.pdf"
+            # Sanitize
+            safe_fn = "".join(c for c in display_invoice_number if c.isalnum() or c in ('-','_'))
+            file_name = f"Facture_{safe_fn}.pdf"
+
+            if quote.project:
+                document = Document(
+                    name=f"Facture {display_invoice_number}",
+                    type_document='PDF',
+                    project=quote.project
+                )
+                document.file_url.save(file_name, ContentFile(pdf_content))
+                document.save()
+            
+            response = HttpResponse(buffer, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+            return response
+
         except Exception as e:
             import traceback
             traceback.print_exc()

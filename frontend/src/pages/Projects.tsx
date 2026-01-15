@@ -39,6 +39,7 @@ interface Project {
 interface Client {
   id_client: number;
   nom_client: string;
+  ice?: string;
 }
 
 interface Employee {
@@ -489,7 +490,14 @@ export const Projects = () => {
                     <td className="p-4">
                         <div className="flex items-center text-gray-700">
                             <Building className="w-4 h-4 mr-2 text-gray-400" />
-                            {project.client_name || clients.find(c => c.id_client === project.client)?.nom_client || '-'}
+                            <div className="flex flex-col">
+                                <span>{project.client_name || clients.find(c => c.id_client === project.client)?.nom_client || '-'}</span>
+                                {(() => {
+                                    const c = clients.find(c => c.id_client === project.client);
+                                    if (c && c.ice) return <span className="text-xs text-gray-400">ICE: {c.ice}</span>;
+                                    return null;
+                                })()}
+                            </div>
                         </div>
                     </td>
                     <td className="p-4">

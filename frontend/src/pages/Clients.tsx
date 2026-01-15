@@ -19,6 +19,7 @@ import api from '../api/axios';
 interface Client {
   id_client: number;
   nom_client: string;
+  ice?: string;
   type_client: 'PARTICULIER' | 'ENTREPRISE';
   telephone: string;
   email: string;
@@ -44,6 +45,7 @@ export const Clients = () => {
   // Form state
   const [formData, setFormData] = useState({
     nom_client: '',
+    ice: '',
     type_client: 'ENTREPRISE',
     telephone: '',
     email: '',
@@ -133,6 +135,7 @@ export const Clients = () => {
     setEditingClient(null);
     setFormData({
       nom_client: '',
+      ice: '',
       type_client: 'ENTREPRISE',
       telephone: '',
       email: '',
@@ -147,6 +150,7 @@ export const Clients = () => {
     setEditingClient(client);
     setFormData({
       nom_client: client.nom_client,
+      ice: client.ice || '',
       type_client: client.type_client,
       telephone: client.telephone,
       email: client.email,
@@ -243,7 +247,10 @@ export const Clients = () => {
                         </div>
                         <div>
                           <p className="font-semibold text-gray-900">{client.nom_client}</p>
-                          <span className="text-xs text-gray-500">{client.type_client}</span>
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-500">{client.type_client}</span>
+                            {client.ice && <span className="text-xs text-gray-400">ICE: {client.ice}</span>}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -411,6 +418,22 @@ export const Clients = () => {
                       <option value="ENTREPRISE">Entreprise</option>
                       <option value="PARTICULIER">Particulier</option>
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ICE</label>
+                    <input
+                      type="text"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={formData.ice}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (/^\d*$/.test(val)) { // Only allow digits
+                            setFormData({...formData, ice: val});
+                        }
+                      }}
+                      placeholder="Identifiant Commun de l'Entreprise"
+                    />
                   </div>
                   
                   <div>

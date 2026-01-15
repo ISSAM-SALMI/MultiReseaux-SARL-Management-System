@@ -17,3 +17,9 @@ class MaterialSerializer(serializers.ModelSerializer):
     class Meta:
         model = Material
         fields = '__all__'
+
+class GeneralExpenseSerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import GeneralExpense
+        model = GeneralExpense
+        fields = '__all__'

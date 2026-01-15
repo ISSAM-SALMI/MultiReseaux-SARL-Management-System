@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'notifications',
     'hr_estimation',
     'payroll',
+    'suppliers',
 ]
 
 

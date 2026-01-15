@@ -1,12 +1,105 @@
 from core.views import BaseViewSet
 from .models import Project, ProjectHR, ProjectCost, Revenue, Expense, ProjectWorker, ProjectWorkerAttendance
 from .serializers import ProjectSerializer, ProjectHRSerializer, ProjectCostSerializer, RevenueSerializer, ExpenseSerializer, ProjectWorkerSerializer, ProjectWorkerAttendanceSerializer
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.db.models import Sum, Q
+import datetime
 
 class ProjectViewSet(BaseViewSet):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
     module_name = 'projects'
     pagination_class = None
+
+    @action(detail=False, methods=['get'])
+    def financial_overview(self, request):
+        today = datetime.date.today()
+        try:
+            year = int(request.query_params.get('year', today.year))
+            month = int(request.query_params.get('month', today.month))
+        except ValueError:
+            year = today.year
+            month = today.month
+            
+        # Determine period dates
+        import calendar
+        _, last_day = calendar.monthrange(year, month)
+        start_date = datetime.date(year, month, 1)
+        end_date = datetime.date(year, month, last_day)
+
+        # 1. Revenue (Projects active in period)
+        # Assuming we want to see ALL projects revenue if they overlap with the period
+        projects_in_period = self.queryset.filter(
+            date_debut__lte=end_date
+        ).filter(
+            Q(date_fin__gte=start_date) | Q(date_fin__isnull=True)
+        )
+        
+        revenue_stats = projects_in_period.values('billing_status').annotate(total=Sum('budget_total'))
+        
+        billed = 0
+        unbilled = 0
+        in_progress = 0
+        
+        for item in revenue_stats:
+            if item['billing_status'] == 'FACTURE':
+                billed = item['total'] or 0
+            elif item['billing_status'] == 'NON_FACTURE':
+                unbilled = item['total'] or 0
+            elif item['billing_status'] == 'EN_COURS':
+                in_progress = item['total'] or 0
+                
+        gross_margin = billed + unbilled + in_progress
+        
+        # 2. Expenses (Monthly)
+        from suppliers.models import SupplierInvoice
+        try:
+            from payroll.models import SalaryPeriod
+        except ImportError:
+            SalaryPeriod = None
+        from budget.models import GeneralExpense
+        
+        suppliers_total = SupplierInvoice.objects.filter(
+            date__year=year, 
+            date__month=month
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        labor_total = 0
+        if SalaryPeriod:
+            # Check logic for SalaryPeriod dates
+            labor_total = SalaryPeriod.objects.filter(
+                start_date__year=year,
+                start_date__month=month
+            ).aggregate(total=Sum('real_salary'))['total'] or 0
+
+        general_total = GeneralExpense.objects.filter(
+            date__year=year,
+            date__month=month
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        total_expenses = suppliers_total + labor_total + general_total
+        
+        net_margin = gross_margin - total_expenses
+        
+        return Response({
+            'period': {'month': month, 'year': year},
+            'revenue': {
+                'billed': billed,
+                'unbilled': unbilled,
+                'in_progress': in_progress,
+                'gross_margin': gross_margin
+            },
+            'expenses': {
+                'total': total_expenses,
+                'breakdown': {
+                    'suppliers': suppliers_total,
+                    'labor': labor_total,
+                    'other': general_total
+                }
+            },
+            'net_margin': net_margin
+        })
 
 class ProjectWorkerAttendanceViewSet(BaseViewSet):
     queryset = ProjectWorkerAttendance.objects.all()

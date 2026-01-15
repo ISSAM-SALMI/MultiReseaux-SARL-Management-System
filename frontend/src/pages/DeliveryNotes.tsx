@@ -44,6 +44,8 @@ interface Document {
 export const DeliveryNotes = () => {
     const [activeTab, setActiveTab] = useState<'create' | 'history'>('create');
     const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
+    const [blNumber, setBlNumber] = useState('');
+    const [bcNumber, setBcNumber] = useState('');
 
     // Fetch Quotes (Only Validated ones normally, but here all)
     const { data: quotes = [] } = useQuery<Quote[]>('quotes', async () => {
@@ -81,7 +83,10 @@ export const DeliveryNotes = () => {
     // Generate PDF
     const generateMutation = useMutation(
         async (id: number) => {
-            const response = await api.post(`/quotes/${id}/generate-delivery-note/`, {}, {
+            const response = await api.post(`/quotes/${id}/generate-delivery-note/`, {
+                bl_number: blNumber,
+                bc_number: bcNumber
+            }, {
                 responseType: 'blob'
             });
             const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -189,6 +194,31 @@ export const DeliveryNotes = () => {
                                         Seuls les articles du devis sélectionné seront inclus.
                                     </p>
                                 </div>
+
+                                {selectedQuote && (
+                                    <div className="space-y-4 pt-4 border-t border-gray-100">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">N° Bon de Livraison</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                placeholder="Saisir le N° BL..."
+                                                value={blNumber}
+                                                onChange={(e) => setBlNumber(e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">N° Bon de Commande</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                placeholder="Saisir le N° BC..."
+                                                value={bcNumber}
+                                                onChange={(e) => setBcNumber(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
 
                                 {selectedQuote && (
                                     <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">

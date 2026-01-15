@@ -38,6 +38,9 @@ class QuoteLine(models.Model):
 
 class QuoteTracking(models.Model):
     quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name='trackings', db_column='id_quote')
+    bl_number = models.CharField(max_length=50, blank=True, null=True, help_text="Numéro du Bon de Livraison")
+    bc_number = models.CharField(max_length=50, blank=True, null=True, help_text="Numéro du Bon de Commande")
+    invoice_number = models.CharField(max_length=50, blank=True, null=True, help_text="Numéro de Facture")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

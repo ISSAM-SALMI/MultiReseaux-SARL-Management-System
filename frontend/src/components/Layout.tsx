@@ -21,7 +21,9 @@ import {
   ChevronDown,
   ShoppingBag,
   PieChart,
-  FolderOpen
+  FolderOpen,
+  ShoppingCart,
+  TrendingUp
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -73,6 +75,16 @@ export const Layout = () => {
             { to: '/quote-tracking', icon: PieChart, label: 'Suivi Devis' },
             { to: '/delivery-notes', icon: Truck, label: 'Bons de Livraison' },
             { to: '/invoices', icon: FileCheck, label: 'Factures' },
+            { to: '/revenue', icon: TrendingUp, label: 'Revenus & Marges' },
+        ]
+    },
+
+    {
+        label: 'Gestion Achats',
+        icon: ShoppingCart,
+        children: [
+            { to: '/suppliers', icon: Truck, label: 'Fournisseurs' },
+            { to: '/expenses', icon: PieChart, label: 'Dépenses' },
         ]
     },
 
