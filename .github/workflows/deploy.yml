@@ -1,0 +1,47 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Deploy to VM
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.GCP_VM_HOST }}
+        username: ${{ secrets.GCP_VM_USERNAME }}
+        key: ${{ secrets.GCP_SSH_KEY }}
+        script: |
+          # S'assurer que le dossier app existe
+          mkdir -p ~/app
+          cd ~/app
+
+          # Mettre à jour le code
+          # Si le dossier est déjà un repo git
+          if [ -d ".git" ]; then
+            git pull origin main
+          else
+            # Sinon, on clone pour la première fois (attention à l'auth, si repo public pas de souci, sinon besoin de token)
+            # Pour simplifier, on suppose que vous avez configuré l'accès ou repo public
+            # Ou on utilise git avec token: https://TOKEN@github.com/user/repo.git
+            git clone https://github.com/${{ github.repository }}.git .
+          fi
+
+          # Créer le fichier .env.prod à partir du secret GitHub
+          echo "${{ secrets.ENV_FILE_PROD }}" > .env.prod
+
+          # Lancer le déploiement en production
+          # On arrête d'abord les conteneurs pour forcer la recréation
+          docker compose -f docker-compose.prod.yml down
+          
+          # On nettoie les images inutilisées pour ne pas saturer le disque
+          docker system prune -af
+
+          # On relance tout
+          docker compose -f docker-compose.prod.yml up -d --build --remove-orphans

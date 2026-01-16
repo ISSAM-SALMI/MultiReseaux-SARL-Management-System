@@ -30,7 +30,7 @@ services:
   celery:
     build: ./backend
     command: celery -A multisarl worker -l info
-    env_file: .env.prods
+    env_file: .env.prod
     depends_on:
       - backend
       - redis
