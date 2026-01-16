@@ -184,3 +184,6 @@ if os.environ.get('USE_S3') == 'true':
     AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
 else:
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+
+CSRF_TRUSTED_ORIGINS = ['http://35.208.189.105', 'http://localhost']
+
