@@ -34,13 +34,46 @@ class QuoteViewSet(BaseViewSet):
         COLOR_TEXT = colors.HexColor('#2c3e50')
         COLOR_LIGHT_GRAY = colors.HexColor('#f8f9fa')
         
-        # Document Setup
+        # --- Pre-calculate Header/Footer Dimensions for Margins ---
+        header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
+        footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'footer.png')
+        
+        header_height_reserved = 0
+        footer_height_reserved = 50 
+
+        # Calculate Header Height
+        if os.path.exists(header_path):
+            try:
+                img_reader = ImageReader(header_path)
+                iw, ih = img_reader.getSize()
+                aspect = ih / float(iw)
+                # Keep logo professional size (approx 60% of content width)
+                # Available width is A4[0] - margins(60)
+                available_width_for_header = (A4[0] - 60) * 0.6
+                header_height_reserved = (available_width_for_header * aspect) + 20
+            except Exception as e:
+                print(f"Error checking header size: {e}")
+
+        # Calculate Footer Height
+        if os.path.exists(footer_path):
+            try:
+                img_reader = ImageReader(footer_path)
+                iw, ih = img_reader.getSize()
+                aspect = ih / float(iw)
+                # Footer is usually 90% of page width
+                footer_height_reserved = (A4[0] * 0.9 * aspect) + 20
+            except Exception as e:
+                print(f"Error checking footer size: {e}")
+        
+        # Document Setup with Dynamic Margins
         doc = SimpleDocTemplate(
             buffer, 
             pagesize=A4,
             rightMargin=30, leftMargin=30, 
-            topMargin=5, bottomMargin=50 
+            topMargin=max(30, header_height_reserved + 10), 
+            bottomMargin=max(50, footer_height_reserved + 10) 
         )
+        
         elements = []
         styles = getSampleStyleSheet()
         
@@ -49,29 +82,15 @@ class QuoteViewSet(BaseViewSet):
         normal_style.fontSize = 10
         normal_style.textColor = COLOR_TEXT
         
-        # Calculate available width
+        # Calculate available width based on margins
         available_width = A4[0] - 60 
 
-        # --- 1. Header (Image) ---
-        header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
-        if os.path.exists(header_path):
-            try:
-                img_reader = ImageReader(header_path)
-                iw, ih = img_reader.getSize()
-                aspect = ih / float(iw)
-                # Keep logo professional size
-                target_width = available_width * 0.6
-                target_height = target_width * aspect
-                elements.append(Image(header_path, width=target_width, height=target_height, hAlign='CENTER'))
-                elements.append(Spacer(1, 20))
-            except Exception as e:
-                print(f"Error loading header image: {e}")
+        # Note: Header Image is removed from 'elements' to be handled by Page Template
         
         # --- 2. Info Block (2 Columns) ---
         client = quote.project.client if quote.project else None
         
         # Left Column Data
-        # Date du devis (date actuelle or date_livraison as per logic)
         formatted_date = quote.date_livraison.strftime('%d/%m/%Y') if quote.date_livraison else datetime.now().strftime('%d/%m/%Y')
         info_left = [
             Paragraph(f"<b>Date :</b> {formatted_date}", normal_style),
@@ -159,7 +178,7 @@ class QuoteViewSet(BaseViewSet):
             ('TEXTCOLOR', (0, 0), (-1, -1), COLOR_TEXT),
             
             # Total TTC Highlight
-            ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_SECONDARY), # Red text
+            ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_SECONDARY), 
             ('FONTSIZE', (0, 2), (-1, 2), 11),
             ('LINEABOVE', (0, 2), (-1, 2), 1, COLOR_PRIMARY), 
             ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ecf0f1')),
@@ -178,8 +197,7 @@ class QuoteViewSet(BaseViewSet):
         elements.append(Paragraph(f"Arrêté le présent devis à la somme de : <b>{total_ttc:,.2f} Dirhams TTC</b>", normal_style))
         elements.append(Spacer(1, 30))
         
-        # Signature Image Preparation
-        # "Ajouter uniquement la signature du prestataire ... Positionnée en bas à droite"
+        # Signature Image
         signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'signature.jpeg')
         signature_content = [Paragraph("<b>Signature</b>", styles['Normal'])]
         
@@ -206,31 +224,50 @@ class QuoteViewSet(BaseViewSet):
         ]))
         elements.append(signature_table)
 
-        def add_footer(canvas, doc):
+        # --- HEADER & FOOTER ON CANVAS ---
+        def draw_page_framework(canvas, doc):
             canvas.saveState()
-            footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'footer.png')
-            if os.path.exists(footer_path):
+            page_w, page_h = A4
+            
+            # Draw Header (Fixed Position Top)
+            if os.path.exists(header_path):
                 try:
-                    img_reader = ImageReader(footer_path)
-                    iw, ih = img_reader.getSize()
+                    img = ImageReader(header_path)
+                    iw, ih = img.getSize()
                     aspect = ih / float(iw)
                     
-                    # Target width: 90% of page width (larger, clear, centered)
-                    page_width = A4[0]
-                    target_width = page_width * 0.9 
-                    target_height = target_width * aspect
+                    content_width_h = page_w - 60
+                    target_width_h = content_width_h * 0.6
+                    target_height_h = target_width_h * aspect
                     
-                    # Center x
-                    x = (page_width - target_width) / 2
-                    # y Position: 10 units from bottom
-                    y = 10
+                    x = (page_w - target_width_h) / 2
+                    y = page_h - target_height_h - 10 # 10 padding from top
                     
-                    canvas.drawImage(footer_path, x, y, width=target_width, height=target_height, mask='auto', preserveAspectRatio=True)
+                    canvas.drawImage(header_path, x, y, width=target_width_h, height=target_height_h, mask='auto', preserveAspectRatio=True)
                 except Exception as e:
-                    print(f"Error loading footer: {e}")
+                    print(f"Error drawing header on page: {e}")
+
+            # Draw Footer (Fixed Position Bottom)
+            if os.path.exists(footer_path):
+                try:
+                    img = ImageReader(footer_path)
+                    iw, ih = img.getSize()
+                    aspect = ih / float(iw)
+                    
+                    target_width_f = page_w * 0.9 
+                    target_height_f = target_width_f * aspect
+                    
+                    x = (page_w - target_width_f) / 2
+                    y = 10 
+                    
+                    canvas.drawImage(footer_path, x, y, width=target_width_f, height=target_height_f, mask='auto', preserveAspectRatio=True)
+                except Exception as e:
+                    print(f"Error drawing footer on page: {e}")
             canvas.restoreState()
 
-        doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
+        # Build PDF with Page Template
+        doc.build(elements, onFirstPage=draw_page_framework, onLaterPages=draw_page_framework)
+        
         pdf_content = buffer.getvalue()
         buffer.seek(0)
         
@@ -308,13 +345,43 @@ class QuoteViewSet(BaseViewSet):
             COLOR_TEXT = colors.HexColor('#2c3e50')
             COLOR_LIGHT_GRAY = colors.HexColor('#f8f9fa')
 
-            # Document Setup
+             # --- Pre-calculate Header/Footer Dimensions for Margins ---
+            header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
+            footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'footer.png')
+            
+            header_height_reserved = 0
+            footer_height_reserved = 50 
+
+            # Calculate Header Height
+            if os.path.exists(header_path):
+                try:
+                    img_reader = ImageReader(header_path)
+                    iw, ih = img_reader.getSize()
+                    aspect = ih / float(iw)
+                    available_width_for_header = (A4[0] - 60) * 0.6
+                    header_height_reserved = (available_width_for_header * aspect) + 20
+                except Exception as e:
+                    print(f"Error checking header size: {e}")
+
+            # Calculate Footer Height
+            if os.path.exists(footer_path):
+                try:
+                    img_reader = ImageReader(footer_path)
+                    iw, ih = img_reader.getSize()
+                    aspect = ih / float(iw)
+                    footer_height_reserved = (A4[0] * 0.9 * aspect) + 20
+                except Exception as e:
+                    print(f"Error checking footer size: {e}")
+
+            # Document Setup with Dynamic Margins
             doc = SimpleDocTemplate(
                 buffer, 
                 pagesize=A4,
                 rightMargin=30, leftMargin=30, 
-                topMargin=5, bottomMargin=50 
+                topMargin=max(30, header_height_reserved + 10), 
+                bottomMargin=max(50, footer_height_reserved + 10) 
             )
+
             elements = []
             styles = getSampleStyleSheet()
             
@@ -324,19 +391,8 @@ class QuoteViewSet(BaseViewSet):
             
             available_width = A4[0] - 60 
 
-            # --- 1. Header (Image) ---
-            header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
-            if os.path.exists(header_path):
-                try:
-                    img_reader = ImageReader(header_path)
-                    iw, ih = img_reader.getSize()
-                    aspect = ih / float(iw)
-                    target_width = available_width * 0.6
-                    target_height = target_width * aspect
-                    elements.append(Image(header_path, width=target_width, height=target_height, hAlign='CENTER'))
-                    elements.append(Spacer(1, 20))
-                except Exception as e:
-                    print(f"Error loading header image: {e}")
+            # Note: Header removed from elements
+
 
             # --- 2. Info Block (2 Columns) ---
             client = quote.project.client if quote.project else None
@@ -495,24 +551,48 @@ class QuoteViewSet(BaseViewSet):
             ]))
             elements.append(sigs_layout_table)
 
-            def add_footer(canvas, doc):
+             # --- HEADER & FOOTER ON CANVAS ---
+            def draw_page_framework(canvas, doc):
                 canvas.saveState()
-                footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'footer.png')
+                page_w, page_h = A4
+                
+                # Draw Header (Fixed Position Top)
+                if os.path.exists(header_path):
+                    try:
+                        img = ImageReader(header_path)
+                        iw, ih = img.getSize()
+                        aspect = ih / float(iw)
+                        
+                        content_width_h = page_w - 60
+                        target_width_h = content_width_h * 0.6
+                        target_height_h = target_width_h * aspect
+                        
+                        x = (page_w - target_width_h) / 2
+                        y = page_h - target_height_h - 10 
+                        
+                        canvas.drawImage(header_path, x, y, width=target_width_h, height=target_height_h, mask='auto', preserveAspectRatio=True)
+                    except Exception as e:
+                        print(f"Error drawing header on page: {e}")
+
+                # Draw Footer (Fixed Position Bottom)
                 if os.path.exists(footer_path):
                     try:
-                        img_reader = ImageReader(footer_path)
-                        iw, ih = img_reader.getSize()
+                        img = ImageReader(footer_path)
+                        iw, ih = img.getSize()
                         aspect = ih / float(iw)
-                        target_width = A4[0] * 0.9 
-                        target_height = target_width * aspect
-                        x = (A4[0] - target_width) / 2
-                        y = 10
-                        canvas.drawImage(footer_path, x, y, width=target_width, height=target_height, mask='auto', preserveAspectRatio=True)
+                        
+                        target_width_f = page_w * 0.9 
+                        target_height_f = target_width_f * aspect
+                        
+                        x = (page_w - target_width_f) / 2
+                        y = 10 
+                        
+                        canvas.drawImage(footer_path, x, y, width=target_width_f, height=target_height_f, mask='auto', preserveAspectRatio=True)
                     except Exception as e:
-                        print(f"Error loading footer: {e}")
+                        print(f"Error drawing footer on page: {e}")
                 canvas.restoreState()
 
-            doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
+            doc.build(elements, onFirstPage=draw_page_framework, onLaterPages=draw_page_framework)
             pdf_content = buffer.getvalue()
             buffer.seek(0)
             
@@ -586,13 +666,43 @@ class QuoteViewSet(BaseViewSet):
             COLOR_TEXT = colors.HexColor('#2c3e50')
             COLOR_LIGHT_GRAY = colors.HexColor('#f8f9fa')
 
-            # Document Setup
+             # --- Pre-calculate Header/Footer Dimensions for Margins ---
+            header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
+            footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'footer.png')
+            
+            header_height_reserved = 0
+            footer_height_reserved = 50 
+
+            # Calculate Header Height
+            if os.path.exists(header_path):
+                try:
+                    img_reader = ImageReader(header_path)
+                    iw, ih = img_reader.getSize()
+                    aspect = ih / float(iw)
+                    available_width_for_header = (A4[0] - 60) * 0.6
+                    header_height_reserved = (available_width_for_header * aspect) + 20
+                except Exception as e:
+                    print(f"Error checking header size: {e}")
+
+            # Calculate Footer Height
+            if os.path.exists(footer_path):
+                try:
+                    img_reader = ImageReader(footer_path)
+                    iw, ih = img_reader.getSize()
+                    aspect = ih / float(iw)
+                    footer_height_reserved = (A4[0] * 0.9 * aspect) + 20
+                except Exception as e:
+                    print(f"Error checking footer size: {e}")
+            
+            # Document Setup with Dynamic Margins
             doc = SimpleDocTemplate(
                 buffer, 
                 pagesize=A4,
                 rightMargin=30, leftMargin=30, 
-                topMargin=5, bottomMargin=50 
+                topMargin=max(30, header_height_reserved + 10), 
+                bottomMargin=max(50, footer_height_reserved + 10) 
             )
+
             elements = []
             styles = getSampleStyleSheet()
             
@@ -602,19 +712,8 @@ class QuoteViewSet(BaseViewSet):
             
             available_width = A4[0] - 60 
 
-            # --- 1. Header (Image) ---
-            header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
-            if os.path.exists(header_path):
-                try:
-                    img_reader = ImageReader(header_path)
-                    iw, ih = img_reader.getSize()
-                    aspect = ih / float(iw)
-                    target_width = available_width * 0.6
-                    target_height = target_width * aspect
-                    elements.append(Image(header_path, width=target_width, height=target_height, hAlign='CENTER'))
-                    elements.append(Spacer(1, 20))
-                except Exception as e:
-                    print(f"Error loading header image: {e}")
+            # Note: Header removed from elements
+
 
             # --- 2. Info Block (2 Columns) ---
             client = quote.project.client if quote.project else None
@@ -774,25 +873,48 @@ class QuoteViewSet(BaseViewSet):
             ]))
             elements.append(sigs_layout_table)
 
-
-            def add_footer(canvas, doc):
+             # --- HEADER & FOOTER ON CANVAS ---
+            def draw_page_framework(canvas, doc):
                 canvas.saveState()
-                footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'footer.png')
+                page_w, page_h = A4
+                
+                # Draw Header (Fixed Position Top)
+                if os.path.exists(header_path):
+                    try:
+                        img = ImageReader(header_path)
+                        iw, ih = img.getSize()
+                        aspect = ih / float(iw)
+                        
+                        content_width_h = page_w - 60
+                        target_width_h = content_width_h * 0.6
+                        target_height_h = target_width_h * aspect
+                        
+                        x = (page_w - target_width_h) / 2
+                        y = page_h - target_height_h - 10 
+                        
+                        canvas.drawImage(header_path, x, y, width=target_width_h, height=target_height_h, mask='auto', preserveAspectRatio=True)
+                    except Exception as e:
+                        print(f"Error drawing header on page: {e}")
+
+                # Draw Footer (Fixed Position Bottom)
                 if os.path.exists(footer_path):
                     try:
-                        img_reader = ImageReader(footer_path)
-                        iw, ih = img_reader.getSize()
+                        img = ImageReader(footer_path)
+                        iw, ih = img.getSize()
                         aspect = ih / float(iw)
-                        target_width = A4[0] * 0.9 
-                        target_height = target_width * aspect
-                        x = (A4[0] - target_width) / 2
-                        y = 10
-                        canvas.drawImage(footer_path, x, y, width=target_width, height=target_height, mask='auto', preserveAspectRatio=True)
+                        
+                        target_width_f = page_w * 0.9 
+                        target_height_f = target_width_f * aspect
+                        
+                        x = (page_w - target_width_f) / 2
+                        y = 10 
+                        
+                        canvas.drawImage(footer_path, x, y, width=target_width_f, height=target_height_f, mask='auto', preserveAspectRatio=True)
                     except Exception as e:
-                        print(f"Error loading footer: {e}")
+                        print(f"Error drawing footer on page: {e}")
                 canvas.restoreState()
 
-            doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
+            doc.build(elements, onFirstPage=draw_page_framework, onLaterPages=draw_page_framework)
             pdf_content = buffer.getvalue()
             buffer.seek(0)
             

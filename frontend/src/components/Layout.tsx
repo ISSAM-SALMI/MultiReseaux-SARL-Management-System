@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import logo from '../assets/logo.png';
 
 interface NavItem {
   label: string;
@@ -120,12 +121,12 @@ export const Layout = () => {
           const hasActiveChild = item.children.some(child => child.to === location.pathname);
           
           return (
-              <div key={item.label} className="mb-1">
+              <div key={item.label} className="mb-2">
                   <button
                       onClick={() => toggleGroup(item.label)}
                       className={twMerge(
-                          "w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors group",
-                          hasActiveChild ? "bg-blue-50/50 text-blue-800" : "text-gray-700 hover:bg-gray-50",
+                          "w-full flex items-center justify-between px-3 py-3 rounded-xl transition-all duration-200 group border border-transparent",
+                          hasActiveChild ? "text-white bg-white/5 border-white/5" : "text-slate-400 hover:bg-white/5 hover:text-white",
                           !isSidebarOpen && "justify-center px-2"
                       )}
                       title={!isSidebarOpen ? item.label : undefined}
@@ -133,7 +134,7 @@ export const Layout = () => {
                       <div className="flex items-center overflow-hidden">
                           <item.icon className={twMerge(
                               "w-5 h-5 flex-shrink-0 transition-colors",
-                              hasActiveChild ? "text-blue-600" : "text-gray-400 group-hover:text-gray-600",
+                              hasActiveChild ? "text-brand-blue" : "text-slate-500 group-hover:text-brand-blue",
                               isSidebarOpen ? "mr-3" : "mx-auto"
                           )} />
                           <span className={clsx("whitespace-nowrap font-medium transition-all duration-300", !isSidebarOpen && "w-0 opacity-0 hidden")}>
@@ -142,7 +143,7 @@ export const Layout = () => {
                       </div>
                       {isSidebarOpen && (
                           <ChevronDown className={twMerge(
-                              "w-4 h-4 text-gray-400 transition-transform duration-200",
+                              "w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white",
                               isExpanded && "transform rotate-180"
                           )} />
                       )}
@@ -152,7 +153,7 @@ export const Layout = () => {
                       "overflow-hidden transition-all duration-300 ease-in-out",
                       (isExpanded && isSidebarOpen) ? "max-h-96 opacity-100 mt-1" : "max-h-0 opacity-0"
                   )}>
-                      <div className="space-y-1">
+                      <div className="space-y-1 py-1">
                         {item.children.map(child => renderNavItem(child, depth + 1))}
                       </div>
                   </div>
@@ -167,18 +168,18 @@ export const Layout = () => {
           to={item.to!}
           title={!isSidebarOpen ? item.label : undefined}
           className={twMerge(
-            "flex items-center px-3 py-2.5 rounded-lg transition-colors group",
+            "flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 group relative overflow-hidden",
             isActive 
-              ? "bg-blue-50 text-blue-700 font-medium" 
-              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
-            depth > 0 && "ml-4 border-l-2 border-gray-100 pl-4", // Indentation
+              ? "bg-gradient-to-r from-brand-blue to-cyan-500 text-white shadow-soft font-semibold" 
+              : "text-slate-400 hover:bg-white/5 hover:text-white",
+            depth > 0 && "ml-4 pl-4 border-l border-white/10", // Indentation with guide line
             !isSidebarOpen && "justify-center ml-0 pl-3"
           )}
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <item.icon className={twMerge(
             "w-5 h-5 flex-shrink-0 transition-colors",
-            isActive ? "text-blue-600" : "text-gray-400 group-hover:text-gray-600",
+            isActive ? "text-white" : "text-slate-500 group-hover:text-brand-blue",
             (isSidebarOpen && depth === 0) ? "mr-3" : (isSidebarOpen && depth > 0) ? "mr-3 w-4 h-4" : "mx-auto"
           )} />
           <span className={clsx(
@@ -187,6 +188,7 @@ export const Layout = () => {
           )}>
             {item.label}
           </span>
+          {isActive && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white/20 rounded-l-full" />}
         </Link>
       );
   };
@@ -204,35 +206,39 @@ export const Layout = () => {
       {/* Sidebar */}
       <div 
         className={twMerge(
-          "fixed lg:static inset-y-0 left-0 z-30 bg-white border-r shadow-sm transition-all duration-300 ease-in-out flex flex-col",
+          "fixed lg:static inset-y-0 left-0 z-30 bg-brand-navy border-r border-brand-navy shadow-xl transition-all duration-300 ease-in-out flex flex-col scale-100",
           isSidebarOpen ? "w-72" : "w-20", // Slightly wider for submenus
           !isMobileMenuOpen && "-translate-x-full lg:translate-x-0"
         )}
       >
-        <div className="h-16 flex items-center justify-between px-4 border-b">
-          <div className={clsx("flex items-center font-bold text-xl text-blue-600 transition-all overflow-hidden whitespace-nowrap", !isSidebarOpen && "lg:hidden")}>
-             {isSidebarOpen ? "System MULTISARL" : "SM"}
+        <div className="h-20 flex items-center justify-center px-4 border-b border-white/10 bg-black/10">
+          <div className={clsx("flex items-center transition-all overflow-hidden", !isSidebarOpen && "lg:hidden")}>
+             <img src={logo} alt="MultiReseaux" className="h-12 w-auto object-contain drop-shadow-md" />
           </div>
+          {!isSidebarOpen && (
+              <img src={logo} alt="MR" className="h-8 w-auto object-contain lg:block hidden" />
+          )}
+
            {/* Mobile Close Button */}
-           <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden p-1 rounded-md hover:bg-gray-100">
-             <ChevronLeft className="w-6 h-6 text-gray-500" />
+           <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden p-1 rounded-md text-white hover:bg-white/10 ml-auto">
+             <ChevronLeft className="w-6 h-6" />
            </button>
         </div>
 
-        <nav className="flex-1 p-3 space-y-2 overflow-y-auto">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto custom-scrollbar">
           {navItems.map(item => renderNavItem(item))}
         </nav>
         
-        <div className="p-3 border-t bg-gray-50/50">
+        <div className="p-3 border-t border-white/10 bg-black/10">
           <button
             onClick={handleLogout}
             className={twMerge(
-              "flex items-center w-full px-3 py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors group",
+              "flex items-center w-full px-3 py-2.5 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-all duration-200 group",
               !isSidebarOpen && "justify-center"
             )}
             title="Déconnexion"
           >
-            <LogOut className="w-5 h-5 flex-shrink-0 group-hover:text-red-700" />
+            <LogOut className="w-5 h-5 flex-shrink-0" />
             <span className={clsx("ml-3 whitespace-nowrap font-medium", !isSidebarOpen && "lg:hidden")}>Déconnexion</span>
           </button>
         </div>
