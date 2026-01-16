@@ -21,8 +21,24 @@ export const Login = () => {
       const response = await api.post('/auth/login/', { username, password });
       setToken(response.data.access, response.data.refresh);
       navigate('/');
-    } catch (err) {
-      setError('Identifiants invalides. Veuillez réessayer.');
+    } catch (err: any) {
+      console.error("Login error:", err);
+      if (err.response) {
+         // The server responded with a status code that falls out of the range of 2xx
+         if (err.response.status === 401) {
+            setError('Identifiants invalides.');
+         } else if (err.response.status === 404) {
+            setError('Serveur injoignable (404). Vérifiez la configuration API.');
+         } else {
+            setError(`Erreur serveur: ${err.response.status} - ${err.response.statusText}`);
+         }
+      } else if (err.request) {
+         // The request was made but no response was received
+         setError('Impossible de contacter le serveur. Vérifiez votre connexion.');
+      } else {
+         // Something happened in setting up the request that triggered an Error
+         setError('Erreur de configuration: ' + err.message);
+      }
     } finally {
       setIsLoading(false);
     }
