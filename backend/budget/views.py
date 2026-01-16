@@ -60,14 +60,55 @@ class GeneralExpenseViewSet(BaseViewSet):
             date__month=month
         ).aggregate(total=Sum('amount'))['total'] or 0
 
-        # 2. Labor Expenses (Main-d'oeuvre)
-        labor_total = 0
-        if SalaryPeriod:
-            # Assuming start_date determines the payment month
-            labor_total = SalaryPeriod.objects.filter(
-                start_date__year=year,
-                start_date__month=month
-            ).aggregate(total=Sum('real_salary'))['total'] or 0
+        # 2. Labor Expenses (Main-d'oeuvre) - Calculated from Project Duration & Workers
+        try:
+            from projects.models import Project
+            import calendar
+
+            # Determine month range
+            _, last_day = calendar.monthrange(year, month)
+            start_date = datetime.date(year, month, 1)
+            end_date = datetime.date(year, month, last_day)
+
+            # Find projects active in this month
+            projects_in_period = Project.objects.filter(
+                date_debut__lte=end_date,
+                date_fin__gte=start_date
+            ).prefetch_related('workers')
+
+            labor_total = 0
+            labor_breakdown = []
+
+            for project in projects_in_period:
+                # Calculate overlap duration
+                p_start = max(project.date_debut, start_date)
+                p_end = min(project.date_fin, end_date)
+                duration = (p_end - p_start).days + 1
+                
+                if duration > 0:
+                    # Sum daily salaries of all workers in this project
+                    project_daily_cost = project.workers.aggregate(total=Sum('daily_salary'))['total'] or 0
+                    project_month_cost = project_daily_cost * duration
+                    
+                    labor_total += project_month_cost
+                    
+                    labor_breakdown.append({
+                        'project': project.nom_projet,
+                        'duration_days': duration,
+                        'workers_count': project.workers.count(),
+                        'daily_run_rate': project_daily_cost,
+                        'total_cost': project_month_cost
+                    })
+
+        except ImportError:
+             # Fallback
+            labor_total = 0
+            labor_breakdown = []
+            if SalaryPeriod:
+                labor_total = SalaryPeriod.objects.filter(
+                    start_date__year=year,
+                    start_date__month=month
+                ).aggregate(total=Sum('real_salary'))['total'] or 0
 
         # 3. Other Expenses (GeneralExpense)
         general_total_qs = self.queryset.filter(
@@ -87,5 +128,6 @@ class GeneralExpenseViewSet(BaseViewSet):
                 'general_options_total': general_total,
                 'grand_total': suppliers_total + labor_total + general_total
             },
+            'labor_breakdown': labor_breakdown,
             'general_expenses_breakdown': breakdown
         })

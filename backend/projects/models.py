@@ -57,9 +57,22 @@ class ProjectWorker(models.Model):
     class Meta:
         db_table = 'PROJECT_WORKERS'
 
+    def save(self, *args, **kwargs):
+        if not self.daily_salary and self.employee:
+            # Assume 6 working days per week for daily rate calculation
+            if self.employee.salaire_semaine:
+                self.daily_salary = self.employee.salaire_semaine / 6
+            else:
+                 # Fallback if no salary defined? Set to 0 to avoid DB error
+                 self.daily_salary = 0
+        elif not self.daily_salary:
+             self.daily_salary = 0
+        super().save(*args, **kwargs)
+
 class ProjectWorkerAttendance(models.Model):
     STATUS_CHOICES = [
         ('PRESENT', 'Présent'),
+        ('HALF_DAY', 'Demi-journée'),
         ('ABSENT_JUSTIFIED', 'Absent justifié'),
         ('ABSENT_UNJUSTIFIED', 'Absent injustifié'),
     ]

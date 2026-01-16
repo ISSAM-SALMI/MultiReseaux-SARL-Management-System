@@ -34,9 +34,11 @@ function App() {
             <Route path="/delivery-notes" element={<DeliveryNotes />} />
             <Route path="/invoices" element={<Invoices />} />
             <Route path="/revenue" element={<Revenue />} />
+            <Route path="/suppliers" element={<Suppliers />} />
+            <Route path="/expenses" element={<Expenses />} />
             <Route path="/salaries" element={<Salaries />} />
             <Route path="/budget" element={<Budget />} />
-            <Route path="/delivery-notes" element={<DeliveryNotes />} />
+            <Route path="/documents" element={<Documents />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/hr-estimation" element={<HREstimation />} />
           </Route>

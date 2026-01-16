@@ -9,6 +9,7 @@ class ProjectWorkerAttendanceSerializer(serializers.ModelSerializer):
 class ProjectWorkerSerializer(serializers.ModelSerializer):
     employee_name = serializers.SerializerMethodField()
     project_details = serializers.SerializerMethodField()
+    daily_salary = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
 
     class Meta:
         model = ProjectWorker
