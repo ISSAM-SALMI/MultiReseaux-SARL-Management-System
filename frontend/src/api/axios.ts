@@ -2,7 +2,7 @@ import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'ax
 import { useAuthStore } from '../store/authStore';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
 });
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
@@ -23,7 +23,9 @@ api.interceptors.response.use(
         const refreshToken = useAuthStore.getState().refreshToken;
         if (!refreshToken) throw new Error('No refresh token');
         
-        const response = await axios.post('http://localhost:8000/api/auth/refresh/', {
+        // Use the same base URL logic as the main api instance
+        const baseURL = import.meta.env.VITE_API_URL || '/api';
+        const response = await axios.post(`${baseURL}/auth/refresh/`, {
           refresh: refreshToken,
         });
         
