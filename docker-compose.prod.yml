@@ -52,8 +52,8 @@ services:
       dockerfile: Dockerfile
     command: npm run build
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      # On ne monte PAS le code source local ici pour éviter les problèmes de permissions/node_modules
+      # On utilise le code copié dans l'image lors du build
       - frontend_build:/app/dist
     environment:
       - VITE_API_URL=/api
