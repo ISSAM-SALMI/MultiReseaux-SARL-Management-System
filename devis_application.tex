@@ -1,0 +1,73 @@
+% Facture d'une page pour l'application - montant total 6000 MAD
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{geometry}
+\geometry{margin=1.6cm}
+\usepackage{lmodern}
+\usepackage{xcolor,tabularx,booktabs}
+\usepackage{array}
+\usepackage{microtype}
+\renewcommand{\familydefault}{\sfdefault}
+\pagestyle{empty}
+\begin{document}
+% Header
+\begin{minipage}{0.62\textwidth}
+{\LARGE\bfseries MULTISARL Solutions}\\[2pt]
+Adresse : Rue Exemple, Ville\\
+Téléphone : +212 6X XXX XXXX \\ Email : contact@multisarl.example
+\end{minipage}\hfill
+\begin{minipage}{0.35\textwidth}\raggedleft
+	extbf{Facture N°:} F-2026-001\\
+	extbf{Date:} 19 janvier 2026\\
+	extbf{Client:} [Nom du client]
+\end{minipage}
+\vspace{6pt}\hrule\vspace{8pt}
+
+\begin{center}
+  {\Large\bfseries FACTURE}\
+\end{center}
+\vspace{6pt}
+\noindent{\textbf{Objet :}} Facturation des prestations de développement et déploiement de l'application.
+\\[8pt]
+
+% Table des prestations facturées
+\small
+\begin{tabularx}{\textwidth}{@{}p{0.66\textwidth}@{}>{\raggedleft\arraybackslash}p{0.28\textwidth}@{}}
+	oprule
+	extbf{Description} & \textbf{Montant (MAD)}\\
+\midrule
+Authentification et gestion utilisateurs & 800\\[4pt]
+Gestion clients (CRUD, fiches, historique) & 700\\[4pt]
+Module facturation (génération PDF, modèles, envoi) & 900\\[4pt]
+Gestion projets et suivi budgétaire & 900\\[4pt]
+Module budget et rapports & 700\\[4pt]
+Documents et gestion des médias & 400\\[4pt]
+Notifications et alertes & 300\\[4pt]
+Tableau de bord et rapports (KPIs) & 400\\[4pt]
+Tests, déploiement Docker, documentation & 200\\
+\midrule
+	extbf{Montant total dû} & \textbf{6000 MAD}\\
+\bottomrule
+\end{tabularx}
+
+\vspace{8pt}
+\normalsize
+	extbf{Modalités de paiement}\\[4pt]
+Paiement à 30 jours par virement bancaire. Pour règlement anticipé, contactez-nous pour une remise éventuelle.
+
+\vspace{8pt}
+	extbf{Informations bancaires}\\[4pt]
+BANQUE EXEMPLE \\ IBAN: MA00 0000 0000 0000 0000 00 \\ BIC: EXAMPBXXXX
+
+\vspace{10pt}
+\noindent{\textbf{Notes}}:\\
+- Cette facture correspond aux prestations listées ci-dessus.\\
+- Toute modification du périmètre fera l'objet d'un avenant et d'une facturation supplémentaire.\\[8pt]
+
+\vfill
+\noindent{\textbf{Signature client :}} \hrulefill\quad\quad {\textbf{Signature fournisseur :}} \hrulefill\\[6pt]
+\small Merci de nous contacter pour toute question : contact@multisarl.example
+
+\end{document}

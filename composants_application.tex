@@ -1,0 +1,51 @@
+% Composants de l'application - liste ligne par ligne
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{geometry}
+\geometry{margin=1.6cm}
+\usepackage{lmodern}
+\usepackage{parskip}
+\renewcommand{\familydefault}{\sfdefault}
+\pagestyle{empty}
+\begin{document}
+\centerline{\LARGE\bfseries Composants de l'application}
+\vspace{8pt}
+Ci‑dessous la liste des composants de l'application, un par ligne, avec brève précision.
+\vspace{8pt}
+\begin{tabular}{@{}p{0.92\textwidth}@{}}
+\hline
+\textbf{Authentification :} Django auth / Django REST Framework + JWT ou OAuth2, gestion des rôles (RBAC).\\\hline
+\textbf{Frontend :} React + TypeScript, Vite, composants réutilisables, routage et state management (Redux / Zustand).\\\hline
+\textbf{Backend :} Django + Django REST Framework, apps: authentication, clients, invoices, projects, budget, documents, notifications.\\\hline
+\textbf{Base de données :} PostgreSQL (production), schéma géré par migrations Django.\\\hline
+\textbf{Cache / Sessions :} Redis pour cache, sessions et files de tâches.\\\hline
+\textbf{Stockage médias :} Stockage S3-compatible (ex: AWS S3, MinIO) pour fichiers et images.\\\hline
+\textbf{File de tâches asynchrones :} Celery + Redis (workers, retry, scheduling).\\\hline
+\textbf{Scheduler :} Celery Beat pour tâches planifiées (rapports, relances).\\\hline
+\textbf{CI/CD :} Pipeline (GitHub Actions / GitLab CI) — lint, tests, build frontend, build image Docker, push image, déploiement automatisé.\\\hline
+\textbf{Conteneurisation :} Docker (Dockerfile pour backend et frontend), Docker Compose pour dev.\\\hline
+\textbf{Déploiement :} Registry Docker (Docker Hub / GitLab Registry), déploiement via Docker Compose ou Helm charts sur Kubernetes (GKE/AKS/EKS).\\\hline
+\textbf{Reverse proxy / Web server :} Nginx pour static files, proxy vers Gunicorn / Uvicorn.\\\hline
+\textbf{Serveur d'applications :} Gunicorn (WSGI) ou Uvicorn + ASGI pour features async/websockets.\\\hline
+\textbf{Monitoring :} Prometheus + Grafana pour métriques, Sentry pour suivi d'erreurs.\\\hline
+\textbf{Logging :} Centralisé (ELK / EFK stack) ou solution managée.\\\hline
+\textbf{Sécurité :} HTTPS (Let's Encrypt), CSP, protections CSRF/XSS, rate limiting, gestion des secrets (Vault/Secrets Manager).\\\hline
+\textbf{Sauvegardes :} Backups réguliers de PostgreSQL vers stockage externe, stratégie de rétention.\\\hline
+\textbf{Tests :} Tests unitaires (Django/pytest), tests d'intégration, e2e (Cypress / Playwright).\\\hline
+\textbf{Observabilité / Tracing :} Traces distribuées (Jaeger / OpenTelemetry).\\\hline
+\textbf{Emails / SMTP :} Service SMTP ou API (SendGrid, Mailgun) pour notifications et relances.\\\hline
+\textbf{CDN / Static files :} CDN pour assets statiques (JS/CSS/images).\\\hline
+\textbf{Cache applicatif :} Cache côté HTTP et côté application pour performances (Redis, varnish optionnel).\\\hline
+\textbf{Recherche :} Optionnel — Elasticsearch ou Postgres full‑text pour recherche avancée.\\\hline
+\textbf{Localisation (i18n) :} Support FR/EN via Django i18n et gestion frontend.\\\hline
+\textbf{Documentation :} README, documentation API (OpenAPI / Swagger), guide de déploiement.\\\hline
+\textbf{Variables d'environnement :} Fichier `.env` et gestion sécurisée des secrets en prod.\\\hline
+\textbf{Migrations / Rollbacks :} Processus de migrations et rollbacks testés en CI.\\\hline
+\textbf{Accès administratif :} Interface d'administration Django pour gestion des données.\\\hline
+\end{tabular}
+
+\vfill
+\small Si tu veux, j'ajoute les versions recommandées (ex: Django 4.x, Python 3.11, PostgreSQL 14), ou je génère un PDF. 
+\end{document}

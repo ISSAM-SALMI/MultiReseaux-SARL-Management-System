@@ -194,11 +194,11 @@ export const Layout = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-brand-surface font-sans">
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-20 lg:hidden transition-opacity duration-300"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -206,7 +206,7 @@ export const Layout = () => {
       {/* Sidebar */}
       <div 
         className={twMerge(
-          "fixed lg:static inset-y-0 left-0 z-30 bg-brand-navy border-r border-brand-navy shadow-xl transition-all duration-300 ease-in-out flex flex-col scale-100",
+          "fixed lg:static inset-y-0 left-0 z-30 bg-brand-navy border-r border-brand-navy shadow-2xl lg:shadow-xl transition-all duration-300 ease-in-out flex flex-col scale-100",
           isSidebarOpen ? "w-72" : "w-20", // Slightly wider for submenus
           !isMobileMenuOpen && "-translate-x-full lg:translate-x-0"
         )}
@@ -220,7 +220,7 @@ export const Layout = () => {
           )}
 
            {/* Mobile Close Button */}
-           <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden p-1 rounded-md text-white hover:bg-white/10 ml-auto">
+           <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden p-1 rounded-md text-white hover:bg-white/10 ml-auto transition-colors">
              <ChevronLeft className="w-6 h-6" />
            </button>
         </div>
@@ -245,37 +245,37 @@ export const Layout = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-brand-surface">
         {/* Top Header */}
-        <header className="bg-white border-b shadow-sm h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8 z-10 relative">
+        <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-sm h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8 z-10 sticky top-0">
            <div className="flex items-center">
              <button 
                onClick={() => setIsMobileMenuOpen(true)}
-               className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+               className="lg:hidden p-2 -ml-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue"
              >
                <Menu className="w-6 h-6" />
              </button>
              <button
                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-               className="hidden lg:flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+               className="hidden lg:flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
              >
                 {isSidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
              </button>
            </div>
            
            <div className="flex items-center space-x-4">
-             <div className="flex flex-col items-end mr-2">
-                 <span className="text-sm font-medium text-gray-700">Admin</span>
+             <div className="hidden sm:flex flex-col items-end mr-2">
+                 <span className="text-sm font-semibold text-gray-700">Admin</span>
                  <span className="text-xs text-gray-500">MultiReseaux SARL</span>
              </div>
-             <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-blue-100 to-blue-200 flex items-center justify-center text-blue-700 font-bold border border-blue-200 shadow-sm">
+             <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-brand-blue to-cyan-400 flex items-center justify-center text-white font-bold border border-white shadow-md ring-2 ring-brand-blue/10">
                 A
              </div>
            </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 bg-gray-50/50">
-           <div className="max-w-7xl mx-auto space-y-6 pb-12">
+        <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 scroll-smooth">
+           <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-fade-in">
               <Outlet />
            </div>
         </main>

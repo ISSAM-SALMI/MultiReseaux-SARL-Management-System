@@ -23,6 +23,33 @@ interface TrackingLinesModalProps {
 export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, initialTotalHt }: TrackingLinesModalProps) => {
   const queryClient = useQueryClient();
   const [lines, setLines] = useState<TrackingLine[]>([]);
+  const [highlightedEditedIds, setHighlightedEditedIds] = useState<Set<number>>(new Set());
+  const [highlightedAddedIds, setHighlightedAddedIds] = useState<Set<number>>(new Set());
+
+  const HIGHLIGHTS_KEY = 'tracking_line_highlights_v1';
+
+  const loadHighlightsForTracking = (trackId: number) => {
+    try {
+      const raw = localStorage.getItem(HIGHLIGHTS_KEY);
+      if (!raw) return { edited: new Set<number>(), added: new Set<number>() };
+      const parsed = JSON.parse(raw || '{}');
+      const obj = parsed[trackId] || { edited: [], added: [] };
+      return { edited: new Set<number>(obj.edited || []), added: new Set<number>(obj.added || []) };
+    } catch (e) {
+      return { edited: new Set<number>(), added: new Set<number>() };
+    }
+  };
+
+  const saveHighlightsForTracking = (trackId: number, editedSet: Set<number>, addedSet: Set<number>) => {
+    try {
+      const raw = localStorage.getItem(HIGHLIGHTS_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      parsed[trackId] = { edited: Array.from(editedSet), added: Array.from(addedSet) };
+      localStorage.setItem(HIGHLIGHTS_KEY, JSON.stringify(parsed));
+    } catch (e) {
+      // ignore
+    }
+  };
 
   const [newLine, setNewLine] = useState({
     designation: '',
@@ -42,14 +69,47 @@ export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, i
     }
   );
 
+  useEffect(() => {
+    if (isOpen && trackingId) {
+      const loaded = loadHighlightsForTracking(trackingId);
+      setHighlightedEditedIds(loaded.edited);
+      setHighlightedAddedIds(loaded.added);
+    }
+  }, [isOpen, trackingId]);
+
   const updateLineMutation = useMutation(
     async (line: TrackingLine) => {
-      await api.patch(`/quotes/tracking-lines/${line.id}/`, line);
+      const response = await api.patch(`/quotes/tracking-lines/${line.id}/`, line);
+      return response.data;
     },
     {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['tracking-lines', trackingId]);
+      onSuccess: (updatedLine: TrackingLine) => {
+        setLines((prev) => {
+          // Keep the exact same index: find existing index and replace
+          const idx = prev.findIndex((l) => l.id === updatedLine.id);
+          if (idx === -1) return prev;
+          const next = [...prev];
+          next[idx] = updatedLine;
+          return next;
+        });
+
+        // Persistently mark this line as edited for this tracking
+        setHighlightedEditedIds((prevEdited) => {
+          const nextEdited = new Set(prevEdited);
+          nextEdited.add(updatedLine.id);
+          // also remove from added set if present
+          setHighlightedAddedIds((prevAdded) => {
+            const nextAdded = new Set(prevAdded);
+            nextAdded.delete(updatedLine.id);
+            saveHighlightsForTracking(trackingId, nextEdited, nextAdded);
+            return nextAdded;
+          });
+          return nextEdited;
+        });
       },
+      onError: () => {
+        // Optionally, show error (kept silent here)
+      }
     }
   );
 
@@ -60,20 +120,43 @@ export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, i
     {
       onSuccess: (_, variables) => {
         queryClient.invalidateQueries(['tracking-lines', trackingId]);
-        setLines(lines.filter(l => l.id !== variables));
+        setLines((prev) => prev.filter(l => l.id !== variables));
+        // Remove highlight from both sets if present
+        setHighlightedEditedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(variables as number);
+          return next;
+        });
+        setHighlightedAddedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(variables as number);
+          saveHighlightsForTracking(trackingId, highlightedEditedIds, next);
+          return next;
+        });
       },
     }
   );
 
   const createLineMutation = useMutation(
     async (lineData: any) => {
-      await api.post('/quotes/tracking-lines/', {
+      const response = await api.post('/quotes/tracking-lines/', {
         ...lineData,
         tracking: trackingId
       });
+      return response.data;
     },
     {
-      onSuccess: () => {
+      onSuccess: (createdLine: TrackingLine) => {
+        // Append new line to the end to preserve order
+        setLines((prev) => [...prev, createdLine]);
+        // Mark as added (persistently)
+        setHighlightedAddedIds((prev) => {
+          const next = new Set(prev);
+          next.add(createdLine.id);
+          saveHighlightsForTracking(trackingId, highlightedEditedIds, next);
+          return next;
+        });
+
         queryClient.invalidateQueries(['tracking-lines', trackingId]);
         setNewLine({
           designation: '',
@@ -95,6 +178,27 @@ export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, i
     }
     
     setLines(newLines);
+    // If the user starts editing a line that was previously highlighted,
+    // remove the persistent highlight (it will be re-added on successful save)
+    const editedId = newLines[index]?.id;
+    if (editedId) {
+      // remove from added
+      setHighlightedAddedIds((prev) => {
+        if (!prev.has(editedId)) return prev;
+        const next = new Set(prev);
+        next.delete(editedId);
+        saveHighlightsForTracking(trackingId, highlightedEditedIds, next);
+        return next;
+      });
+      // remove from edited (user action implies transient change)
+      setHighlightedEditedIds((prev) => {
+        if (!prev.has(editedId)) return prev;
+        const next = new Set(prev);
+        next.delete(editedId);
+        saveHighlightsForTracking(trackingId, next, highlightedAddedIds);
+        return next;
+      });
+    }
   };
 
   const saveLine = (line: TrackingLine) => {
@@ -132,7 +236,7 @@ export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, i
             </thead>
             <tbody className="divide-y divide-gray-200">
               {lines.map((line, index) => (
-                <tr key={line.id}>
+                <tr key={line.id} className={`${highlightedEditedIds.has(line.id) ? 'bg-yellow-100' : highlightedAddedIds.has(line.id) ? 'bg-blue-100' : ''}`}>
                   <td className="px-4 py-2">
                     <input
                       type="text"
@@ -153,8 +257,10 @@ export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, i
                     <input
                       type="number"
                       value={line.prix_unitaire}
-                      onChange={(e) => handleUpdateLine(index, 'prix_unitaire', Number(e.target.value))}
-                      className="w-full text-right border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      readOnly
+                      disabled
+                      aria-readonly="true"
+                      className="w-full text-right border-gray-200 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed"
                     />
                   </td>
                   <td className="px-4 py-2 text-right font-medium">

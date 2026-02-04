@@ -221,8 +221,8 @@ const SalaryDetailsPanel = ({ periodId, onClose }: { periodId: number; onClose: 
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-              ))
-            ) : (
+              ))) 
+              : (
                <div className="text-center py-6 text-gray-400 text-sm bg-gray-50 rounded-lg border border-dashed">
                  Aucun congé enregistré pour cette période.
                </div>
@@ -250,9 +250,9 @@ export const Salaries = () => {
       await api.delete(`/payroll/periods/${id}/`);
     },
     {
-      onSuccess: () => {
+      onSuccess: (_data, variables) => {
         queryClient.invalidateQueries('salary-periods');
-        if (selectedPeriodId === id) setSelectedPeriodId(null);
+        if (selectedPeriodId === variables) setSelectedPeriodId(null);
       },
     }
   );
@@ -263,16 +263,16 @@ export const Salaries = () => {
   );
 
   return (
-    <div className="flex h-[calc(100vh-theme(spacing.24))] overflow-hidden bg-gray-100 -m-6 p-6">
+    <div className="flex flex-col md:flex-row h-auto md:h-[calc(100vh-theme(spacing.24))] overflow-hidden bg-gray-100 -m-6 p-6">
       {/* List Panel */}
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 pr-0 ${selectedPeriodId ? 'mr-4' : ''}`}>
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Gestion des Salaires</h1>
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 pr-0 ${selectedPeriodId ? 'md:mr-4' : ''}`}>
+        <div className="flex flex-col xs:flex-row justify-between items-stretch xs:items-center mb-6 gap-2 xs:gap-4">
+          <h1 className="text-lg xs:text-2xl font-bold text-gray-800">Gestion des Salaires</h1>
           <button
             onClick={() => setIsNewPeriodOpen(true)}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 shadow-sm"
+            className="w-full xs:w-auto flex items-center px-3 xs:px-4 py-2 text-sm xs:text-base bg-blue-600 text-white rounded-md hover:bg-blue-700 shadow-sm justify-center"
           >
-            <Plus className="w-5 h-5 mr-2" />
+            <Plus className="w-4 h-4 mr-2" />
             Nouveau Suivi
           </button>
         </div>
@@ -290,8 +290,62 @@ export const Salaries = () => {
             </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden flex-1 flex flex-col">
-          <div className="overflow-y-auto flex-1">
+        {/* Responsive Table/Card View */}
+        <div className="flex-1 flex flex-col">
+          {/* Mobile Card View */}
+          <div className="md:hidden grid grid-cols-1 gap-4">
+            {filteredPeriods.map((period) => (
+              <div key={period.id} className={`bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-2 ${selectedPeriodId === period.id ? 'ring-2 ring-blue-200' : ''}`}
+                onClick={() => setSelectedPeriodId(period.id)}>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-600 font-bold border border-blue-200">
+                    {period.employee_name.charAt(0)}{period.employee_prenom?.charAt(0)}
+                  </div>
+                  <div>
+                    <div className="text-base font-semibold text-gray-900">
+                      {period.employee_name} {period.employee_prenom}
+                    </div>
+                    <div className="text-xs text-gray-500">Matricule: #{period.employee}</div>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center text-sm mb-1">
+                  <div>
+                    <span className="font-medium text-gray-700">{new Date(period.start_date).toLocaleDateString()}</span>
+                    <span className="text-xs text-gray-500"> au {new Date(period.end_date).toLocaleDateString()}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-bold text-gray-900">{Number(period.real_salary).toFixed(2)} DH</span>
+                    {period.total_deductions > 0 && (
+                      <span className="block text-xs text-red-500 font-medium">-{Number(period.total_deductions).toFixed(2)} DH (Abs)</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (confirm('Êtes-vous sûr de vouloir supprimer ce suivi ?')) {
+                        deletePeriodMutation.mutate(period.id);
+                      }
+                    }}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {filteredPeriods.length === 0 && (
+              <div className="text-center py-12 text-gray-500 bg-white rounded-xl border border-dashed">
+                <FileText className="w-12 h-12 text-gray-300 mb-4 mx-auto" />
+                <p className="text-lg font-medium text-gray-900">Aucune période trouvée</p>
+                <p className="text-sm text-gray-500">Commencez par créer un nouveau suivi.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block flex-1 overflow-y-auto">
             <table className="min-w-full divide-y divide-gray-100">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
@@ -378,7 +432,7 @@ export const Salaries = () => {
       {/* Detail Panel - Slide Over */}
       <div 
         className={`bg-white shadow-2xl transition-all duration-300 ease-in-out transform ${
-          selectedPeriodId ? 'w-[500px] translate-x-0' : 'w-0 translate-x-full opacity-0 overflow-hidden'
+          selectedPeriodId ? 'w-full md:w-[500px] translate-x-0' : 'w-0 translate-x-full opacity-0 overflow-hidden'
         }`}
       >
         {selectedPeriodId && (

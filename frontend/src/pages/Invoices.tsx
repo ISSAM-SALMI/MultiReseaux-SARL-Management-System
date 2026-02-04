@@ -158,7 +158,7 @@ export const Invoices = () => {
 
             {/* Content Area */}
             {activeTab === 'create' ? (
-                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-auto lg:h-[calc(100vh-12rem)]">
                     {/* Left Panel: Selection */}
                     <div className="lg:col-span-1 space-y-6">
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -327,7 +327,46 @@ export const Invoices = () => {
             ) : (
                 // History Tab
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="overflow-x-auto">
+                    
+                     {/* Mobile Cards */}
+                     <div className="md:hidden grid grid-cols-1 gap-4 p-4 bg-gray-50">
+                        {isLoadingHistory ? (
+                            <div className="text-center p-8 text-gray-500">Chargement...</div>
+                        ) : invoices.length === 0 ? (
+                            <div className="text-center p-8 text-gray-500">Aucune facture.</div>
+                        ) : (
+                           invoices.map((doc) => (
+                                <div key={doc.id_document} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="flex items-center">
+                                            <div className="p-2 bg-purple-100 text-purple-600 rounded-lg mr-3">
+                                                <FileText className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-gray-900">{doc.name}</p>
+                                                <p className="text-xs text-gray-500">Projet #{doc.project}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center text-sm text-gray-600 mb-4 bg-gray-50 p-2 rounded">
+                                        <Calendar className="w-4 h-4 mr-2 text-gray-400" />
+                                        {new Date(doc.created_at).toLocaleDateString()} {new Date(doc.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    </div>
+                                    <a 
+                                        href={doc.file_url} 
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="flex items-center justify-center w-full px-4 py-2 border border-gray-200 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+                                    >
+                                        <Download className="w-4 h-4 mr-2" />
+                                        Télécharger
+                                    </a>
+                                </div>
+                            ))
+                        )}
+                     </div>
+
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left">
                             <thead className="bg-gray-50 border-b border-gray-100">
                                 <tr>

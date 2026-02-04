@@ -182,7 +182,51 @@ export const Revenue = () => {
                     </select>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="md:hidden grid grid-cols-1 gap-4 p-4 bg-gray-50">
+                     {filteredProjects.map((project: Project) => (
+                        <div key={project.id_project} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                            <div className="flex justify-between items-start mb-3">
+                                <div>
+                                    <h3 className="font-semibold text-gray-900">{project.nom_projet}</h3>
+                                    <p className="text-xs text-gray-500 line-clamp-1">{project.description}</p>
+                                </div>
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold
+                                            ${project.billing_status === 'FACTURE' ? 'bg-green-100 text-green-800' : 
+                                              project.billing_status === 'EN_COURS' ? 'bg-blue-100 text-blue-800' : 
+                                              'bg-red-100 text-red-800'}`}>
+                                            {project.billing_status === 'FACTURE' ? 'Facturé' : 
+                                             project.billing_status === 'EN_COURS' ? 'En Cours' : 'Non Facturé'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm mb-3">
+                                <div className="text-gray-500 flex items-center">
+                                    <Calendar className="w-3 h-3 mr-1" />
+                                    {new Date(project.date_debut).toLocaleDateString()}
+                                </div>
+                                <div className="font-bold text-gray-900">
+                                    {formatMoney(Number(project.budget_total))}
+                                </div>
+                            </div>
+                            <div className="pt-3 border-t border-gray-100">
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Changer Statut:</label>
+                                <select 
+                                    className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-brand-blue focus:ring-brand-blue"
+                                    value={project.billing_status}
+                                    onChange={(e) => handleStatusChange(project, e.target.value)}
+                                >
+                                    <option value="NON_FACTURE">Non Facturé</option>
+                                    <option value="EN_COURS">En Cours</option>
+                                    <option value="FACTURE">Facturé</option>
+                                </select>
+                            </div>
+                        </div>
+                     ))}
+                     {filteredProjects.length === 0 && (
+                        <div className="text-center p-8 text-gray-500">Aucun projet trouvé.</div>
+                     )}
+                </div>
+
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left">
                         <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-semibold">
                             <tr>

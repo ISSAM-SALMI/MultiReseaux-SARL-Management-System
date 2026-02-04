@@ -87,37 +87,94 @@ export const QuoteTracking = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">Suivi des Lignes de Devis</h1>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+           <h1 className="text-2xl font-bold text-gray-800">Suivi des Lignes de Devis</h1>
+           <p className="text-sm text-gray-500 hidden md:block">Suivez l'avancement de la production par ligne</p>
+        </div>
         <button
           onClick={() => setIsSelectQuoteOpen(true)}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="w-full md:w-auto flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
         >
           <Plus className="w-5 h-5 mr-2" />
           Nouveau Suivi
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        
+        {/* Mobile View (Cards) */}
+        <div className="md:hidden grid grid-cols-1 gap-4 p-4 bg-gray-50">
+           {trackings.map((tracking) => {
+              const quote = getQuoteDetails(tracking.quote);
+              return (
+                <div key={tracking.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-start mb-3">
+                        <div>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mb-2">
+                                {quote?.numero_devis || `ID: ${tracking.quote}`}
+                            </span>
+                            <h3 className="font-medium text-gray-900 line-clamp-1">{quote?.objet || 'Sans objet'}</h3>
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-4">
+                        <div>
+                            <span className="block text-xs text-gray-400">Création</span>
+                            {new Date(tracking.created_at).toLocaleDateString()}
+                        </div>
+                         <div>
+                            <span className="block text-xs text-gray-400">Mise à jour</span>
+                            {new Date(tracking.updated_at).toLocaleDateString()}
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-3 border-t border-gray-50">
+                        <button
+                            onClick={() => handleOpenTracking(tracking.id, quote?.numero_devis || '', Number(quote?.total_ht || 0))}
+                            className="flex items-center px-3 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg font-medium"
+                        >
+                            <ArrowRight className="w-4 h-4 mr-1" />
+                            Gérer
+                        </button>
+                         <button
+                            onClick={() => {
+                                if (confirm('Êtes-vous sûr de vouloir supprimer ce suivi ?')) {
+                                    deleteTrackingMutation.mutate(tracking.id);
+                                }
+                            }}
+                            className="flex items-center px-3 py-2 text-sm text-red-600 bg-red-50 rounded-lg font-medium"
+                        >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Supprimer
+                        </button>
+                    </div>
+                </div>
+              );
+           })}
+        </div>
+
+        {/* Desktop View (Table) */}
+        <div className="hidden md:block overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Devis</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Objet</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Création</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dernière Modif</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Devis</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Objet</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date Création</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Dernière Modif</th>
+              <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {trackings.map((tracking) => {
               const quote = getQuoteDetails(tracking.quote);
               return (
-                <tr key={tracking.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <tr key={tracking.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-blue">
                     {quote?.numero_devis || `ID: ${tracking.quote}`}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                     {quote?.objet || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -129,10 +186,11 @@ export const QuoteTracking = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
                         onClick={() => handleOpenTracking(tracking.id, quote?.numero_devis || '', Number(quote?.total_ht || 0))}
-                        className="text-blue-600 hover:text-blue-900 mr-4"
+                        className="text-blue-600 hover:text-blue-900 mr-4 inline-flex items-center"
                         title="Gérer le suivi"
                     >
-                        <ArrowRight className="w-5 h-5" />
+                        <ArrowRight className="w-4 h-4 mr-1" />
+                        Gérer
                     </button>
                     <button
                       onClick={() => {
@@ -140,9 +198,10 @@ export const QuoteTracking = () => {
                           deleteTrackingMutation.mutate(tracking.id);
                         }
                       }}
-                      className="text-red-600 hover:text-red-900"
+                      className="text-red-600 hover:text-red-900 inline-flex items-center"
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Supprimer
                     </button>
                   </td>
                 </tr>
@@ -158,6 +217,7 @@ export const QuoteTracking = () => {
           </tbody>
         </table>
       </div>
+    </div>
 
       {/* Select Quote Modal */}
       {isSelectQuoteOpen && (

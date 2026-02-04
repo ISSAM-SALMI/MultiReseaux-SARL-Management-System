@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { FileText, List } from 'lucide-react';
+import { FileText, List, Search } from 'lucide-react';
 import api from '../api/axios';
 import { DataTable } from '../components/DataTable';
 import { QuoteLinesModal } from '../components/QuoteLinesModal';
@@ -35,6 +35,8 @@ export const Quotes = () => {
     tva: 20,
     project: ''
   });
+  
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Fetch Quotes
   const { data: quotes = [], isLoading } = useQuery<Quote[]>('quotes', async () => {
@@ -161,11 +163,35 @@ export const Quotes = () => {
     }
   };
 
+  const filteredQuotes = quotes.filter(quote => 
+    quote.numero_devis.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    quote.objet.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    projects.find(p => p.id_project === quote.project)?.nom_projet.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <div>
+    <div className="space-y-6">
+       {/* Mobile-first Header & Filters */}
+       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Devis</h1>
+          <p className="text-sm text-gray-500">Gérez vos devis clients</p>
+        </div>
+        <div className="relative w-full md:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <input
+            type="text"
+            placeholder="Rechercher..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue transition-all"
+          />
+        </div>
+      </div>
+
       <DataTable
-        title="Gestion des Devis"
-        data={quotes}
+        title="Liste des Devis"
+        data={filteredQuotes}
         isLoading={isLoading}
         onCreate={openCreateModal}
         onEdit={openEditModal}

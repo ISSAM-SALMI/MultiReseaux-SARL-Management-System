@@ -102,15 +102,15 @@ const EstimationDetailsPanel = ({
 
       <div className="flex-1 overflow-y-auto p-6">
          {/* Live Calculation Cards */}
-         <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                <span className="block text-xs font-bold text-blue-600 uppercase mb-1">Jours Calculés</span>
-                <span className="block text-2xl font-bold text-gray-900">{calculated.days.toFixed(1)} j</span>
-            </div>
-            <div className="bg-green-50 p-4 rounded-xl border border-green-100">
-                <span className="block text-xs font-bold text-green-600 uppercase mb-1">Coût Total</span>
-                <span className="block text-2xl font-bold text-gray-900">{calculated.cost.toFixed(2)} DH</span>
-            </div>
+         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div className="bg-blue-50 p-3 sm:p-4 rounded-xl border border-blue-100">
+            <span className="block text-[11px] sm:text-xs font-bold text-blue-600 uppercase mb-1">Jours Calculés</span>
+            <span className="block text-xl md:text-2xl font-bold text-gray-900">{calculated.days.toFixed(1)} j</span>
+          </div>
+          <div className="bg-green-50 p-3 sm:p-4 rounded-xl border border-green-100">
+            <span className="block text-[11px] sm:text-xs font-bold text-green-600 uppercase mb-1">Coût Total</span>
+            <span className="block text-xl md:text-2xl font-bold text-gray-900">{calculated.cost.toFixed(2)} DH</span>
+          </div>
          </div>
 
          <form onSubmit={handleSubmit} className="space-y-6">
@@ -229,9 +229,9 @@ export const HREstimation = () => {
   const deleteMutation = useMutation(
     (id: number) => api.delete(`/hr-estimation/${id}/`),
     {
-      onSuccess: () => {
+      onSuccess: (_data, variables) => {
         queryClient.invalidateQueries('hr-estimation');
-        if (selectedRowId === id) setSelectedRowId(null);
+        if (selectedRowId === variables) setSelectedRowId(null);
       },
     }
   );
@@ -261,20 +261,20 @@ export const HREstimation = () => {
   const selectedRow = rows.find(r => r.id === selectedRowId) || null;
 
   return (
-    <div className="flex h-[calc(100vh-theme(spacing.24))] overflow-hidden bg-gray-100 -m-6 p-6">
+    <div className="flex flex-col md:flex-row h-auto md:h-[calc(100vh-theme(spacing.24))] overflow-hidden bg-gray-100 -m-6 p-6">
       {/* Left Panel */}
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 pr-0 ${selectedRowId || isCreating ? 'mr-4' : ''}`}>
-        <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800 flex items-center">
-                <Calculator className="w-8 h-8 mr-3 text-blue-600" />
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 pr-0 ${selectedRowId || isCreating ? 'md:mr-4' : ''}`}>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <h1 className="text-lg md:text-2xl font-bold text-gray-800 flex items-center">
+                <Calculator className="w-6 md:w-8 h-6 md:h-8 mr-2 md:mr-3 text-blue-600" />
                 Estimation RH
             </h1>
-            <div className="flex space-x-3">
+            <div className="w-full md:w-auto flex flex-col md:flex-row gap-2 md:gap-3">
                 <button
                     onClick={() => {
                         if (confirm('Voulez-vous vraiment vider tout le tableau ?')) clearAllMutation.mutate();
                     }}
-                    className="px-4 py-2 border border-gray-200 bg-white text-gray-600 rounded-lg hover:bg-gray-50 shadow-sm flex items-center"
+                    className="w-full md:w-auto px-3 md:px-4 py-2 text-sm md:text-base border border-gray-200 bg-white text-gray-600 rounded-lg hover:bg-gray-50 shadow-sm flex items-center justify-center"
                 >
                     <RotateCcw className="w-4 h-4 mr-2" />
                     Réinitialiser
@@ -284,46 +284,46 @@ export const HREstimation = () => {
                         setSelectedRowId(null);
                         setIsCreating(true);
                     }}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition-transform hover:scale-105"
+                    className="w-full md:w-auto flex items-center px-3 md:px-4 py-2 text-sm md:text-base bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition-transform hover:scale-105 justify-center"
                 >
-                    <Plus className="w-5 h-5 mr-2" />
+                    <Plus className="w-4 h-4 mr-2" />
                     Ajouter Ligne
                 </button>
             </div>
         </div>
 
         {/* Global Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                  <div className="flex items-center">
                      <div className="p-3 rounded-full bg-blue-100 text-blue-600 mr-4">
-                         <DollarSign className="w-6 h-6" />
+                 <DollarSign className="w-5 h-5 md:w-6 md:h-6" />
                      </div>
                      <div>
-                         <p className="text-sm font-medium text-gray-500">Coût Estimé</p>
-                         <p className="text-xl font-bold text-gray-900">{totals.cost.toFixed(2)} DH</p>
+                 <p className="text-sm font-medium text-gray-500">Coût Estimé</p>
+                 <p className="text-lg md:text-xl font-bold text-gray-900">{totals.cost.toFixed(2)} DH</p>
                      </div>
                  </div>
              </div>
              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                  <div className="flex items-center">
                      <div className="p-3 rounded-full bg-indigo-100 text-indigo-600 mr-4">
-                         <Clock className="w-6 h-6" />
+                 <Clock className="w-5 h-5 md:w-6 md:h-6" />
                      </div>
                      <div>
-                         <p className="text-sm font-medium text-gray-500">Total Jours/Homme</p>
-                         <p className="text-xl font-bold text-gray-900">{totals.days.toFixed(1)} j</p>
+                 <p className="text-sm font-medium text-gray-500">Total Jours/Homme</p>
+                 <p className="text-lg md:text-xl font-bold text-gray-900">{totals.days.toFixed(1)} j</p>
                      </div>
                  </div>
              </div>
              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                  <div className="flex items-center">
                      <div className="p-3 rounded-full bg-purple-100 text-purple-600 mr-4">
-                         <Users className="w-6 h-6" />
+                 <Users className="w-5 h-5 md:w-6 md:h-6" />
                      </div>
                      <div>
-                         <p className="text-sm font-medium text-gray-500">Effectif Total</p>
-                         <p className="text-xl font-bold text-gray-900">{totals.people} Pers.</p>
+                 <p className="text-sm font-medium text-gray-500">Effectif Total</p>
+                 <p className="text-lg md:text-xl font-bold text-gray-900">{totals.people} Pers.</p>
                      </div>
                  </div>
              </div>
@@ -408,7 +408,7 @@ export const HREstimation = () => {
       {/* Right Panel */}
       <div 
         className={`bg-white shadow-2xl transition-all duration-300 ease-in-out transform border-l border-gray-200 ${
-            (selectedRowId || isCreating) ? 'w-[400px] translate-x-0' : 'w-0 translate-x-full opacity-0 overflow-hidden'
+            (selectedRowId || isCreating) ? 'w-full md:w-[400px] translate-x-0' : 'w-0 translate-x-full opacity-0 overflow-hidden'
         }`}
       >
         {(selectedRowId || isCreating) && (

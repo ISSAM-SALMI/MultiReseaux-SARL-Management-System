@@ -48,12 +48,12 @@ export const Dashboard = () => {
 
   return (
     <div className="space-y-8 animate-fade-in-up">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
            <h1 className="text-2xl font-bold text-gray-800">Tableau de Bord</h1>
            <p className="text-gray-500">Bienvenue sur votre espace de gestion.</p>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex flex-wrap gap-3">
            {quickActions.map((action, idx) => (
              <Link 
                key={idx} 
@@ -151,26 +151,46 @@ export const Dashboard = () => {
       </div>
       
       {/* Recent Quotes */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+      <div className="bg-white p-6 rounded-xl shadow-card border border-gray-100">
          <div className="flex justify-between items-center mb-4">
              <h3 className="text-lg font-bold text-gray-800">Derniers Devis</h3>
-             <Link to="/quotes" className="text-sm text-blue-600 hover:text-blue-700">Voir tout</Link>
+             <Link to="/quotes" className="text-sm text-blue-600 hover:text-blue-700 font-medium">Voir tout</Link>
          </div>
-         <div className="overflow-x-auto">
+         
+         {/* Mobile List View */}
+         <div className="md:hidden space-y-3">
+            {kpis?.recent_quotes?.map((quote: any) => (
+                <div key={quote.id_quote} className="p-3 bg-gray-50 rounded-lg border border-gray-100 flex justify-between items-center">
+                    <div>
+                        <p className="font-semibold text-gray-800">{quote.numero_devis}</p>
+                        <p className="text-xs text-gray-500">{quote.date_livraison}</p>
+                    </div>
+                    <span className="font-bold text-brand-blue">
+                        {Number(quote.total_ttc).toLocaleString('fr-MA')} MAD
+                    </span>
+                </div>
+            ))}
+             {!kpis?.recent_quotes?.length && (
+                 <p className="text-center py-4 text-gray-400">Aucun devis récent.</p>
+             )}
+         </div>
+
+         {/* Desktop Table View */}
+         <div className="hidden md:block overflow-x-auto">
              <table className="w-full text-left">
                  <thead>
-                     <tr className="text-gray-500 text-sm border-b">
-                         <th className="pb-3 font-medium">Référence</th>
-                         <th className="pb-3 font-medium">Date Livraison</th>
-                         <th className="pb-3 font-medium text-right">Total TTC</th>
+                     <tr className="text-gray-500 text-sm border-b border-gray-100">
+                         <th className="pb-3 font-medium px-4">Référence</th>
+                         <th className="pb-3 font-medium px-4">Date Livraison</th>
+                         <th className="pb-3 font-medium text-right px-4">Total TTC</th>
                      </tr>
                  </thead>
                  <tbody className="text-sm">
                      {kpis?.recent_quotes?.map((quote: any) => (
-                         <tr key={quote.id_quote} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
-                             <td className="py-3 text-gray-800 font-medium px-2">{quote.numero_devis}</td>
-                             <td className="py-3 text-gray-500 px-2">{quote.date_livraison}</td>
-                             <td className="py-3 text-right font-medium text-gray-800 px-2">
+                         <tr key={quote.id_quote} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
+                             <td className="py-3 text-gray-800 font-medium px-4">{quote.numero_devis}</td>
+                             <td className="py-3 text-gray-500 px-4">{quote.date_livraison}</td>
+                             <td className="py-3 text-right font-bold text-brand-blue px-4">
                                 {Number(quote.total_ttc).toLocaleString('fr-MA')} MAD
                              </td>
                          </tr>

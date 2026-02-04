@@ -98,8 +98,8 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
           {/* Add New Line Form */}
           <form onSubmit={handleAddLine} className="mb-6 bg-gray-50 p-4 rounded-lg border">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Ajouter une ligne</h3>
-            <div className="grid grid-cols-12 gap-4 items-end">
-              <div className="col-span-6">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+              <div className="md:col-span-6">
                 <label className="block text-xs font-medium text-gray-700 mb-1">Désignation</label>
                 <input
                   type="text"
@@ -109,7 +109,7 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
                   required
                 />
               </div>
-              <div className="col-span-2">
+              <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-gray-700 mb-1">Quantité</label>
                 <input
                   type="number"
@@ -120,7 +120,7 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
                   min="1"
                 />
               </div>
-              <div className="col-span-2">
+              <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-gray-700 mb-1">Prix Unitaire</label>
                 <input
                   type="number"
@@ -131,7 +131,7 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
                   required
                 />
               </div>
-              <div className="col-span-2">
+              <div className="md:col-span-2">
                 <button
                   type="submit"
                   className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 flex items-center justify-center"
@@ -142,9 +142,88 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
             </div>
           </form>
 
-          {/* Lines Table */}
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-left text-sm">
+          {/* Lines List - Adaptive View */}
+          <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+            {/* Mobile Card View */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {isLoading ? (
+                  <div className="p-4 text-center">Chargement...</div>
+                ) : lines.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500">Aucune ligne</div>
+                ) : (lines.map((line) => (
+                  <div key={line.id} className="p-4 space-y-3">
+                     {editingLine?.id === line.id ? (
+                        <div className="space-y-3 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+                            <div>
+                                <label className="text-xs text-gray-500">Désignation</label>
+                                <input
+                                  type="text"
+                                  value={editingLine.designation}
+                                  onChange={(e) => setEditingLine({ ...editingLine, designation: e.target.value })}
+                                  className="w-full p-2 border rounded text-sm bg-white"
+                                />
+                            </div>
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <label className="text-xs text-gray-500">Qté</label>
+                                    <input
+                                      type="number"
+                                      value={editingLine.quantite}
+                                      onChange={(e) => setEditingLine({ ...editingLine, quantite: parseInt(e.target.value) })}
+                                      className="w-full p-2 border rounded text-sm bg-white text-right"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="text-xs text-gray-500">P.U.</label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={editingLine.prix_unitaire}
+                                      onChange={(e) => setEditingLine({ ...editingLine, prix_unitaire: parseFloat(e.target.value) })}
+                                      className="w-full p-2 border rounded text-sm bg-white text-right"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button onClick={() => setEditingLine(null)} className="px-3 py-1 text-xs bg-gray-200 rounded">Annuler</button>
+                                <button onClick={handleUpdateLine} className="px-3 py-1 text-xs bg-blue-600 text-white rounded flex items-center gap-1">
+                                    <Save className="w-3 h-3" /> Enregistrer
+                                </button>
+                            </div>
+                        </div>
+                     ) : (
+                        <div className="flex justify-between items-start">
+                           <div className="flex-1 pr-4">
+                               <p className="font-medium text-gray-800 text-sm">{line.designation}</p>
+                               <div className="flex gap-4 mt-1 text-xs text-gray-500">
+                                   <span>{line.quantite} x {line.prix_unitaire} DH</span>
+                               </div>
+                               <p className="text-sm font-bold text-brand-blue mt-1">{line.montant_ht} DH</p>
+                           </div>
+                           <div className="flex gap-1 shrink-0">
+                                <button onClick={() => setEditingLine(line)} className="p-2 text-blue-600 bg-blue-50 rounded-lg">
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette ligne ?')) {
+                                      deleteMutation.mutate(line.id);
+                                    }
+                                  }} 
+                                  className="p-2 text-red-600 bg-red-50 rounded-lg"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                           </div>
+                        </div>
+                     )}
+                  </div>
+                )))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left text-sm min-w-[600px]">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="p-3 font-medium text-gray-600">Désignation</th>
@@ -192,6 +271,14 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
                           <td className="p-3 text-right font-medium">
                             {(editingLine.quantite * editingLine.prix_unitaire).toFixed(2)} DH
                           </td>
+                          <td className="p-2 text-center">
+                             <button onClick={handleUpdateLine} className="text-green-600 hover:bg-green-50 p-1 rounded" title="Enregistrer">
+                               <Save className="w-4 h-4" />
+                             </button>
+                             <button onClick={() => setEditingLine(null)} className="text-gray-500 hover:bg-gray-100 p-1 rounded" title="Annuler">
+                               <X className="w-4 h-4" />
+                             </button>
+                          </td>
                         </>
                       ) : (
                         <>
@@ -221,6 +308,7 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
         
