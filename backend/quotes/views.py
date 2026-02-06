@@ -1,8 +1,8 @@
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from core.views import BaseViewSet
-from .models import Quote, QuoteLine, QuoteTracking, QuoteTrackingLine
-from .serializers import QuoteSerializer, QuoteLineSerializer, QuoteTrackingSerializer, QuoteTrackingLineSerializer
+from .models import Quote, QuoteLine, QuoteTracking, QuoteTrackingLine, QuoteGroup
+from .serializers import QuoteSerializer, QuoteLineSerializer, QuoteTrackingSerializer, QuoteTrackingLineSerializer, QuoteGroupSerializer
 from documents.models import Document
 from django.core.files.base import ContentFile
 from django.http import HttpResponse
@@ -126,19 +126,8 @@ class QuoteViewSet(BaseViewSet):
         # --- 3. Quote Table ---
         data = [['Désignation', 'Qté', 'P.U. (DH)', 'Total (DH)']]
         
-        for line in quote.lines.all():
-            data.append([
-                Paragraph(line.designation, normal_style),
-                str(line.quantite),
-                f"{line.prix_unitaire:,.2f}",
-                f"{line.montant_ht:,.2f}"
-            ])
-        
-        # Table Styling
-        col_widths = [available_width * 0.55, available_width * 0.1, available_width * 0.15, available_width * 0.2]
-        
-        t = Table(data, colWidths=col_widths)
-        t.setStyle(TableStyle([
+        # Define base styles
+        style_cmds = [
             # Header Row
             ('BACKGROUND', (0, 0), (-1, 0), COLOR_PRIMARY),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -148,14 +137,75 @@ class QuoteViewSet(BaseViewSet):
             ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
             ('TOPPADDING', (0, 0), (-1, 0), 10),
             
-            # Data Rows
+            # General Data Rows
             ('ALIGN', (1, 1), (-1, -1), 'RIGHT'), # Numbers right aligned
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdc3c7')), # Fine borders
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_LIGHT_GRAY]),
-        ]))
+        ]
+        
+        groups = quote.groups.all().order_by('id')
+        has_groups = groups.exists()
+        current_row = 1
+
+        def add_line_row(line):
+            nonlocal current_row
+            data.append([
+                Paragraph(line.designation, normal_style),
+                str(line.quantite),
+                f"{line.prix_unitaire:,.2f}",
+                f"{line.montant_ht:,.2f}"
+            ])
+            # Alternating background could be added here if needed
+            current_row += 1
+
+        if not has_groups:
+             # Legacy / Flat behavior
+             for line in quote.lines.all():
+                 add_line_row(line)
+        else:
+             # Grouped behavior
+             ungrouped_lines = quote.lines.filter(group__isnull=True)
+             
+             # 1. Output ungrouped lines first (if any)
+             if ungrouped_lines.exists():
+                 data.append([Paragraph("<b>Divers / Général</b>", normal_style), "", "", ""])
+                 style_cmds.append(('SPAN', (0, current_row), (-1, current_row)))
+                 style_cmds.append(('BACKGROUND', (0, current_row), (-1, current_row), colors.HexColor('#ecf0f1')))
+                 style_cmds.append(('ALIGN', (0, current_row), (-1, current_row), 'LEFT'))
+                 current_row += 1
+                 
+                 for line in ungrouped_lines:
+                     add_line_row(line)
+            
+             # 2. Output Groups
+             for group in groups:
+                 # Group Header
+                 data.append([Paragraph(f"<b>{group.name}</b>", normal_style), "", "", ""])
+                 style_cmds.append(('SPAN', (0, current_row), (-1, current_row)))
+                 style_cmds.append(('BACKGROUND', (0, current_row), (-1, current_row), colors.HexColor('#ecf0f1')))
+                 style_cmds.append(('ALIGN', (0, current_row), (-1, current_row), 'LEFT'))
+                 current_row += 1
+                 
+                 group_lines = group.lines.all()
+                 group_total = 0
+                 for line in group_lines:
+                     add_line_row(line)
+                     group_total += line.montant_ht
+                 
+                 # Group Subtotal
+                 data.append(["", "", "S/Total", f"{group_total:,.2f}"])
+                 style_cmds.append(('FONTNAME', (2, current_row), (3, current_row), 'Helvetica-Bold'))
+                 # Remove grid for empty cells?
+                 # style_cmds.append(('LINEBELOW', (0, current_row), (-1, current_row), 1, colors.black))
+                 current_row += 1
+        
+        # Table Styling
+        col_widths = [available_width * 0.55, available_width * 0.1, available_width * 0.15, available_width * 0.2]
+        
+        t = Table(data, colWidths=col_widths)
+        t.setStyle(TableStyle(style_cmds))
         elements.append(t)
         elements.append(Spacer(1, 15))
 
@@ -961,5 +1011,13 @@ class QuoteTrackingLineViewSet(BaseViewSet):
     module_name = 'quote_tracking_lines'
     filterset_fields = ['tracking']
     pagination_class = None
+
+class QuoteGroupViewSet(BaseViewSet):
+    queryset = QuoteGroup.objects.all()
+    serializer_class = QuoteGroupSerializer
+    module_name = 'quote_groups'
+    filterset_fields = ['quote']
+    pagination_class = None
+
 
 

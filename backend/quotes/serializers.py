@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Quote, QuoteLine, QuoteTracking, QuoteTrackingLine
+from .models import Quote, QuoteLine, QuoteTracking, QuoteTrackingLine, QuoteGroup
 
 class QuoteTrackingLineSerializer(serializers.ModelSerializer):
     class Meta:
@@ -33,15 +33,35 @@ class QuoteLineSerializer(serializers.ModelSerializer):
         model = QuoteLine
         fields = '__all__'
         read_only_fields = ('montant_ht',)
-        # quote is required for creation via QuoteLineViewSet
+
+
+class QuoteGroupSerializer(serializers.ModelSerializer):
+    """Serializer pour les groupes de lignes de devis"""
+    lines = QuoteLineSerializer(many=True, read_only=True)
+    total_ht = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = QuoteGroup
+        fields = ['id', 'quote', 'name', 'order', 'lines', 'total_ht']
+    
+    def get_total_ht(self, obj):
+        return obj.get_total()
+
 
 class QuoteSerializer(serializers.ModelSerializer):
     lines = QuoteLineSerializer(many=True, required=False)
+    groups = QuoteGroupSerializer(many=True, read_only=True)
+    ungrouped_lines = serializers.SerializerMethodField()
 
     class Meta:
         model = Quote
         fields = '__all__'
         read_only_fields = ('total_ht', 'total_ttc')
+    
+    def get_ungrouped_lines(self, obj):
+        """Retourne les lignes sans groupe"""
+        lines = obj.lines.filter(group__isnull=True)
+        return QuoteLineSerializer(lines, many=True).data
 
     def create(self, validated_data):
         lines_data = validated_data.pop('lines', [])

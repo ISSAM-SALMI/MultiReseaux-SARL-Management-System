@@ -1,10 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ProjectViewSet, ProjectHRViewSet, ProjectCostViewSet, RevenueViewSet, ExpenseViewSet, ProjectWorkerViewSet, ProjectWorkerAttendanceViewSet
+from .views import ProjectViewSet, ProjectHRViewSet, ProjectCostViewSet, RevenueViewSet, ExpenseViewSet
 
 router = DefaultRouter()
-router.register(r'attendance', ProjectWorkerAttendanceViewSet)
-router.register(r'workers', ProjectWorkerViewSet)
 router.register(r'hr', ProjectHRViewSet)
 router.register(r'costs', ProjectCostViewSet)
 router.register(r'revenues', RevenueViewSet)

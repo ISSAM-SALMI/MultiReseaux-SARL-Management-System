@@ -9,6 +9,12 @@ class Employee(models.Model):
     date_debut = models.DateField(null=True, blank=True)
     salaire_semaine = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     fonction = models.CharField(max_length=100, blank=True, null=True)
+    # New required type field: Brocôleurs / Principale
+    TYPE_CHOICES = [
+        ('brocoleurs', 'Brocôleurs'),
+        ('principale', 'Principale'),
+    ]
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='principale')
 
     class Meta:
         db_table = 'EMPLOYEES'

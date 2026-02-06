@@ -20,9 +20,35 @@ class Quote(models.Model):
         self.total_ttc = self.total_ht * (1 + self.tva / 100)
         self.save()
 
+class QuoteGroup(models.Model):
+    """Groupe/Section pour organiser les lignes de devis"""
+    quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name='groups')
+    name = models.CharField(max_length=255)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'QUOTE_GROUPS'
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f"{self.quote.numero_devis} - {self.name}"
+
+    def get_total(self):
+        """Calcule le total HT des lignes du groupe"""
+        return sum(line.montant_ht for line in self.lines.all())
+
+
 class QuoteLine(models.Model):
     # id is default PK
     quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name='lines', db_column='id_quote')
+    group = models.ForeignKey(
+        QuoteGroup, 
+        on_delete=models.SET_NULL, 
+        related_name='lines',
+        null=True,
+        blank=True,
+        help_text="Groupe optionnel pour organiser les lignes"
+    )
     designation = models.CharField(max_length=255)
     quantite = models.IntegerField()
     prix_unitaire = models.DecimalField(max_digits=12, decimal_places=2)

@@ -14,7 +14,8 @@ interface Employee {
   cin: string;
   date_debut: string;
   salaire_semaine: number;
-  fonction: string;
+    fonction: string;
+    type: string;
 }
 
 interface ProjectWorker {
@@ -68,7 +69,8 @@ const EmployeeDetailsPanel = ({
     cin: '',
     date_debut: '',
     salaire_semaine: 0,
-    fonction: ''
+        fonction: '',
+        type: 'principale'
   });
 
   // Load data into form when employee loads
@@ -83,7 +85,8 @@ const EmployeeDetailsPanel = ({
             cin: employee.cin,
             date_debut: employee.date_debut,
             salaire_semaine: employee.salaire_semaine,
-            fonction: employee.fonction
+                        fonction: employee.fonction,
+                        type: employee.type || 'principale'
         });
       }
       return null;
@@ -251,6 +254,18 @@ const EmployeeDetailsPanel = ({
                             placeholder="Ex: Chef de chantier"
                         />
                     </div>
+                </div>
+                <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Type</label>
+                    <select
+                        required
+                        value={formData.type}
+                        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                        className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    >
+                        <option value="brocoleurs">Brocôleurs</option>
+                        <option value="principale">Principale</option>
+                    </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -426,6 +441,7 @@ export const Budget = () => {
                                 <tr>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Employé</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Fonction</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">CIN</th>
                                     <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                                 </tr>
@@ -461,6 +477,13 @@ export const Budget = () => {
                                             <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
                                                 {employee.fonction || 'Non défini'}
                                             </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {employee.type === 'brocoleurs' ? (
+                                                <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-indigo-100 text-indigo-800">Brocôleurs</span>
+                                            ) : (
+                                                <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Principale</span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
                                             {employee.cin}

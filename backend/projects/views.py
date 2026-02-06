@@ -1,6 +1,6 @@
 from core.views import BaseViewSet
-from .models import Project, ProjectHR, ProjectCost, Revenue, Expense, ProjectWorker, ProjectWorkerAttendance
-from .serializers import ProjectSerializer, ProjectHRSerializer, ProjectCostSerializer, RevenueSerializer, ExpenseSerializer, ProjectWorkerSerializer, ProjectWorkerAttendanceSerializer
+from .models import Project, ProjectHR, ProjectCost, Revenue, Expense
+from .serializers import ProjectSerializer, ProjectHRSerializer, ProjectCostSerializer, RevenueSerializer, ExpenseSerializer
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Sum, Q
@@ -66,22 +66,6 @@ class ProjectViewSet(BaseViewSet):
         ).aggregate(total=Sum('amount'))['total'] or 0
 
         labor_total = 0
-        from projects.models import ProjectWorkerAttendance
-        from django.db.models import Case, When, Value, DecimalField, F
-        
-        labor_stats = ProjectWorkerAttendance.objects.filter(
-            date__year=year,
-            date__month=month
-        ).annotate(
-            day_value=Case(
-                When(status='PRESENT', then=Value(1.0)),
-                When(status='HALF_DAY', then=Value(0.5)),
-                default=Value(0.0),
-                output_field=DecimalField(max_digits=3, decimal_places=1)
-            )
-        ).aggregate(total_cost=Sum(F('day_value') * F('worker__daily_salary')))
-        
-        labor_total = labor_stats['total_cost'] or 0
 
         general_total = GeneralExpense.objects.filter(
             date__year=year,
@@ -110,18 +94,6 @@ class ProjectViewSet(BaseViewSet):
             },
             'net_margin': net_margin
         })
-
-class ProjectWorkerAttendanceViewSet(BaseViewSet):
-    queryset = ProjectWorkerAttendance.objects.all()
-    serializer_class = ProjectWorkerAttendanceSerializer
-    module_name = 'projects'
-    filterset_fields = ['worker']
-
-class ProjectWorkerViewSet(BaseViewSet):
-    queryset = ProjectWorker.objects.all()
-    serializer_class = ProjectWorkerSerializer
-    module_name = 'projects'
-    filterset_fields = ['project', 'employee']
 
 class ProjectHRViewSet(BaseViewSet):
     queryset = ProjectHR.objects.all()

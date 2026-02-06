@@ -163,11 +163,14 @@ export const Quotes = () => {
     }
   };
 
-  const filteredQuotes = quotes.filter(quote => 
-    quote.numero_devis.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    quote.objet.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    projects.find(p => p.id_project === quote.project)?.nom_projet.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredQuotes = Array.isArray(quotes) ? quotes.filter(quote => { 
+    const term = searchTerm.toLowerCase();
+    const numDevis = quote.numero_devis?.toLowerCase() || '';
+    const objet = quote.objet?.toLowerCase() || '';
+    const projectName = projects.find(p => p.id_project === quote.project)?.nom_projet?.toLowerCase() || '';
+
+    return numDevis.includes(term) || objet.includes(term) || projectName.includes(term);
+  }) : [];
 
   return (
     <div className="space-y-6">

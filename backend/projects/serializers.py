@@ -1,32 +1,5 @@
 from rest_framework import serializers
-from .models import Project, ProjectHR, ProjectCost, Revenue, Expense, ProjectWorker, ProjectWorkerAttendance
-
-class ProjectWorkerAttendanceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProjectWorkerAttendance
-        fields = '__all__'
-
-class ProjectWorkerSerializer(serializers.ModelSerializer):
-    employee_name = serializers.SerializerMethodField()
-    project_details = serializers.SerializerMethodField()
-    daily_salary = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
-
-    class Meta:
-        model = ProjectWorker
-        fields = '__all__'
-
-    def get_employee_name(self, obj):
-        if obj.employee:
-            return f"{obj.employee.nom} {obj.employee.prenom}"
-        return obj.worker_name
-
-    def get_project_details(self, obj):
-        return {
-            "nom_projet": obj.project.nom_projet,
-            "date_debut": obj.project.date_debut,
-            "date_fin": obj.project.date_fin,
-            "etat_projet": obj.project.etat_projet
-        }
+from .models import Project, ProjectHR, ProjectCost, Revenue, Expense
 
 class ProjectHRSerializer(serializers.ModelSerializer):
     class Meta:
