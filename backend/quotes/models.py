@@ -73,8 +73,34 @@ class QuoteTracking(models.Model):
     class Meta:
         db_table = 'QUOTE_TRACKING'
 
+class QuoteTrackingGroup(models.Model):
+    """Groupe/Section pour organiser les lignes de suivi de devis"""
+    tracking = models.ForeignKey(QuoteTracking, on_delete=models.CASCADE, related_name='groups')
+    name = models.CharField(max_length=255)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'QUOTE_TRACKING_GROUPS'
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f"Tracking {self.tracking.id} - {self.name}"
+
+    def get_total(self):
+        """Calcule le total HT des lignes du groupe"""
+        return sum(line.montant_ht for line in self.lines.all())
+
+
 class QuoteTrackingLine(models.Model):
     tracking = models.ForeignKey(QuoteTracking, on_delete=models.CASCADE, related_name='lines', db_column='id_tracking')
+    group = models.ForeignKey(
+        QuoteTrackingGroup, 
+        on_delete=models.SET_NULL, 
+        related_name='lines',
+        null=True,
+        blank=True,
+        help_text="Groupe optionnel pour organiser les lignes"
+    )
     designation = models.CharField(max_length=255)
     quantite = models.IntegerField()
     prix_unitaire = models.DecimalField(max_digits=12, decimal_places=2)

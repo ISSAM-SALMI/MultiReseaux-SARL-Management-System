@@ -1,7 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { X, Plus, Trash2, Save } from 'lucide-react';
+import { X, Plus, Trash2, Save, Edit, List } from 'lucide-react';
 import api from '../api/axios';
+
+interface TrackingGroup {
+  id: number;
+  tracking: number;
+  name: string;
+  order: number;
+}
 
 interface TrackingLine {
   id: number;
@@ -10,6 +17,7 @@ interface TrackingLine {
   prix_unitaire: number;
   montant_ht: number;
   tracking: number;
+  group: number | null;
 }
 
 interface TrackingLinesModalProps {
@@ -22,341 +30,517 @@ interface TrackingLinesModalProps {
 
 export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, initialTotalHt }: TrackingLinesModalProps) => {
   const queryClient = useQueryClient();
-  const [lines, setLines] = useState<TrackingLine[]>([]);
-  const [highlightedEditedIds, setHighlightedEditedIds] = useState<Set<number>>(new Set());
-  const [highlightedAddedIds, setHighlightedAddedIds] = useState<Set<number>>(new Set());
-
-  const HIGHLIGHTS_KEY = 'tracking_line_highlights_v1';
-
-  const loadHighlightsForTracking = (trackId: number) => {
-    try {
-      const raw = localStorage.getItem(HIGHLIGHTS_KEY);
-      if (!raw) return { edited: new Set<number>(), added: new Set<number>() };
-      const parsed = JSON.parse(raw || '{}');
-      const obj = parsed[trackId] || { edited: [], added: [] };
-      return { edited: new Set<number>(obj.edited || []), added: new Set<number>(obj.added || []) };
-    } catch (e) {
-      return { edited: new Set<number>(), added: new Set<number>() };
-    }
-  };
-
-  const saveHighlightsForTracking = (trackId: number, editedSet: Set<number>, addedSet: Set<number>) => {
-    try {
-      const raw = localStorage.getItem(HIGHLIGHTS_KEY);
-      const parsed = raw ? JSON.parse(raw) : {};
-      parsed[trackId] = { edited: Array.from(editedSet), added: Array.from(addedSet) };
-      localStorage.setItem(HIGHLIGHTS_KEY, JSON.stringify(parsed));
-    } catch (e) {
-      // ignore
-    }
-  };
-
   const [newLine, setNewLine] = useState({
     designation: '',
-    quantite: 0,
+    quantite: 1,
     prix_unitaire: 0,
+    group: '' as string | number
   });
+  const [newGroupName, setNewGroupName] = useState('');
+  const [showGroupInput, setShowGroupInput] = useState(false);
+  const [editingLine, setEditingLine] = useState<TrackingLine | null>(null);
+  const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState('');
 
-  const { isLoading } = useQuery(
+  // Fetch Lines
+  const { data: lines = [], isLoading: isLoadingLines } = useQuery<TrackingLine[]>(
     ['tracking-lines', trackingId],
     async () => {
-      const response = await api.get(`/quotes/tracking-lines/?tracking=${trackingId}`);
-      return response.data.results || response.data;
+      try {
+        const response = await api.get(`/quotes/tracking-lines/?tracking=${trackingId}`);
+        return response.data.results || response.data;
+      } catch (e) {
+        console.warn('Tracking lines API error', e);
+        return [];
+      }
     },
+    { enabled: isOpen && !!trackingId }
+  );
+
+  // Fetch Groups
+  const { data: groups = [], isLoading: isLoadingGroups } = useQuery<TrackingGroup[]>(
+    ['tracking-groups', trackingId],
+    async () => {
+      try {
+        const response = await api.get(`/quotes/tracking-groups/?tracking=${trackingId}`);
+        return response.data.results || response.data;
+      } catch (e) {
+        console.warn('Tracking groups API error', e);
+        return [];
+      }
+    },
+    { enabled: isOpen && !!trackingId }
+  );
+
+  const isLoading = isLoadingLines || isLoadingGroups;
+
+  // Mutations
+  const createLineMutation = useMutation(
+    (line: any) => api.post('/quotes/tracking-lines/', { 
+        ...line, 
+        tracking: trackingId,
+        group: line.group === '' ? null : line.group 
+    }),
     {
-      enabled: isOpen && !!trackingId,
-      onSuccess: (data) => setLines(data),
+      onSuccess: () => {
+        queryClient.invalidateQueries(['tracking-lines', trackingId]);
+        setNewLine(prev => ({ ...prev, designation: '', quantite: 1, prix_unitaire: 0 }));
+      },
+      onError: (err) => console.error(err)
     }
   );
 
-  useEffect(() => {
-    if (isOpen && trackingId) {
-      const loaded = loadHighlightsForTracking(trackingId);
-      setHighlightedEditedIds(loaded.edited);
-      setHighlightedAddedIds(loaded.added);
-    }
-  }, [isOpen, trackingId]);
-
   const updateLineMutation = useMutation(
-    async (line: TrackingLine) => {
-      const response = await api.patch(`/quotes/tracking-lines/${line.id}/`, line);
-      return response.data;
-    },
+    (line: any) => api.patch(`/quotes/tracking-lines/${line.id}/`, line),
     {
-      onSuccess: (updatedLine: TrackingLine) => {
-        setLines((prev) => {
-          // Keep the exact same index: find existing index and replace
-          const idx = prev.findIndex((l) => l.id === updatedLine.id);
-          if (idx === -1) return prev;
-          const next = [...prev];
-          next[idx] = updatedLine;
-          return next;
-        });
-
-        // Persistently mark this line as edited for this tracking
-        setHighlightedEditedIds((prevEdited) => {
-          const nextEdited = new Set(prevEdited);
-          nextEdited.add(updatedLine.id);
-          // also remove from added set if present
-          setHighlightedAddedIds((prevAdded) => {
-            const nextAdded = new Set(prevAdded);
-            nextAdded.delete(updatedLine.id);
-            saveHighlightsForTracking(trackingId, nextEdited, nextAdded);
-            return nextAdded;
-          });
-          return nextEdited;
-        });
+      onSuccess: () => {
+        queryClient.invalidateQueries(['tracking-lines', trackingId]);
+        setEditingLine(null);
       },
-      onError: () => {
-        // Optionally, show error (kept silent here)
-      }
     }
   );
 
   const deleteLineMutation = useMutation(
-    async (lineId: number) => {
-      await api.delete(`/quotes/tracking-lines/${lineId}/`);
-    },
+    (id: number) => api.delete(`/quotes/tracking-lines/${id}/`),
     {
-      onSuccess: (_, variables) => {
+      onSuccess: () => {
         queryClient.invalidateQueries(['tracking-lines', trackingId]);
-        setLines((prev) => prev.filter(l => l.id !== variables));
-        // Remove highlight from both sets if present
-        setHighlightedEditedIds((prev) => {
-          const next = new Set(prev);
-          next.delete(variables as number);
-          return next;
-        });
-        setHighlightedAddedIds((prev) => {
-          const next = new Set(prev);
-          next.delete(variables as number);
-          saveHighlightsForTracking(trackingId, highlightedEditedIds, next);
-          return next;
-        });
       },
     }
   );
 
-  const createLineMutation = useMutation(
-    async (lineData: any) => {
-      const response = await api.post('/quotes/tracking-lines/', {
-        ...lineData,
-        tracking: trackingId
-      });
-      return response.data;
-    },
+  const createGroupMutation = useMutation(
+    (name: string) => api.post('/quotes/tracking-groups/', { tracking: trackingId, name }),
     {
-      onSuccess: (createdLine: TrackingLine) => {
-        // Append new line to the end to preserve order
-        setLines((prev) => [...prev, createdLine]);
-        // Mark as added (persistently)
-        setHighlightedAddedIds((prev) => {
-          const next = new Set(prev);
-          next.add(createdLine.id);
-          saveHighlightsForTracking(trackingId, highlightedEditedIds, next);
-          return next;
-        });
-
-        queryClient.invalidateQueries(['tracking-lines', trackingId]);
-        setNewLine({
-          designation: '',
-          quantite: 0,
-          prix_unitaire: 0,
-        });
+      onSuccess: () => {
+        queryClient.invalidateQueries(['tracking-groups', trackingId]);
+        setNewGroupName('');
+        setShowGroupInput(false);
       },
+      onError: (error: any) => {
+        console.error('Error creating group:', error.response?.data || error.message);
+        alert('Erreur lors de la création du groupe: ' + (error.response?.data?.tracking?.[0] || error.message));
+      }
     }
   );
 
-  const handleUpdateLine = (index: number, field: keyof TrackingLine, value: any) => {
-    const newLines = [...lines];
-    newLines[index] = { ...newLines[index], [field]: value };
-    
-    // Auto-save or wait for button? 
-    // Let's calculate montant_ht locally for display
-    if (field === 'quantite' || field === 'prix_unitaire') {
-        newLines[index].montant_ht = newLines[index].quantite * newLines[index].prix_unitaire;
+  const updateGroupMutation = useMutation(
+    (group: { id: number; name: string }) => api.patch(`/quotes/tracking-groups/${group.id}/`, { name: group.name }),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['tracking-groups', trackingId]);
+        setEditingGroupId(null);
+        setEditingGroupName('');
+      }
     }
-    
-    setLines(newLines);
-    // If the user starts editing a line that was previously highlighted,
-    // remove the persistent highlight (it will be re-added on successful save)
-    const editedId = newLines[index]?.id;
-    if (editedId) {
-      // remove from added
-      setHighlightedAddedIds((prev) => {
-        if (!prev.has(editedId)) return prev;
-        const next = new Set(prev);
-        next.delete(editedId);
-        saveHighlightsForTracking(trackingId, highlightedEditedIds, next);
-        return next;
-      });
-      // remove from edited (user action implies transient change)
-      setHighlightedEditedIds((prev) => {
-        if (!prev.has(editedId)) return prev;
-        const next = new Set(prev);
-        next.delete(editedId);
-        saveHighlightsForTracking(trackingId, next, highlightedAddedIds);
-        return next;
-      });
+  );
+
+  const deleteGroupMutation = useMutation(
+    (id: number) => api.delete(`/quotes/tracking-groups/${id}/`),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['tracking-groups', trackingId]);
+        queryClient.invalidateQueries(['tracking-lines', trackingId]);
+      }
+    }
+  );
+
+  // Handlers
+  const handleAddLine = (e: React.FormEvent) => {
+    e.preventDefault();
+    createLineMutation.mutate(newLine);
+  };
+
+  const handleAddGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newGroupName.trim()) {
+      createGroupMutation.mutate(newGroupName);
     }
   };
 
-  const saveLine = (line: TrackingLine) => {
-      updateLineMutation.mutate(line);
+  const handleUpdateLine = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingLine) {
+      updateLineMutation.mutate(editingLine);
+    }
   };
 
-  const currentTotalHt = lines.reduce((sum, line) => sum + (line.quantite * line.prix_unitaire), 0);
+  const handleUpdateGroup = (groupId: number) => {
+    if (editingGroupName.trim()) {
+      updateGroupMutation.mutate({ id: groupId, name: editingGroupName });
+    }
+  };
+
+  // Organize Data
+  const groupedLines = useMemo(() => {
+    const map = new Map<number | 'ungrouped', TrackingLine[]>();
+    
+    if (Array.isArray(groups)) {
+      groups.forEach(g => map.set(g.id, []));
+    }
+    map.set('ungrouped', []);
+
+    if (Array.isArray(lines)) {
+      lines.forEach(line => {
+        if (line.group) {
+          if (map.has(line.group)) {
+            map.get(line.group)?.push(line);
+          } else {
+            map.get('ungrouped')?.push(line);
+          }
+        } else {
+          map.get('ungrouped')?.push(line);
+        }
+      });
+    }
+    return map;
+  }, [lines, groups]);
+
+  const renderLineRow = (line: TrackingLine) => {
+    const isEditing = editingLine?.id === line.id && !!editingLine;
+    
+    if (isEditing) {
+      return (
+        <tr key={line.id} className="bg-blue-50">
+          <td className="p-2">
+            <input
+              type="text"
+              value={editingLine.designation}
+              onChange={(e) => setEditingLine({ ...editingLine, designation: e.target.value })}
+              className="w-full p-1 border rounded"
+            />
+          </td>
+          <td className="p-2">
+            <input
+              type="number"
+              value={editingLine.quantite}
+              onChange={(e) => setEditingLine({ ...editingLine, quantite: parseInt(e.target.value) })}
+              className="w-full p-1 border rounded text-right"
+            />
+          </td>
+          <td className="p-2">
+            <input
+              type="number"
+              step="0.01"
+              value={editingLine.prix_unitaire}
+              readOnly
+              disabled
+              className="w-full p-1 border rounded text-right bg-gray-100 text-gray-600 cursor-not-allowed"
+            />
+          </td>
+          <td className="p-3 text-right font-medium">
+            {(editingLine.quantite * editingLine.prix_unitaire).toFixed(2)} DH
+          </td>
+          <td className="p-2 text-center text-nowrap">
+            <button onClick={handleUpdateLine} className="text-green-600 hover:bg-green-100 p-1 rounded mx-1">
+              <Save className="w-4 h-4" />
+            </button>
+            <button onClick={() => setEditingLine(null)} className="text-gray-500 hover:bg-gray-200 p-1 rounded mx-1">
+              <X className="w-4 h-4" />
+            </button>
+          </td>
+        </tr>
+      );
+    }
+
+    return (
+      <tr key={line.id} className="hover:bg-gray-50 border-b last:border-0 border-gray-100">
+        <td className="p-3 text-sm">{line.designation}</td>
+        <td className="p-3 text-right text-sm">{line.quantite}</td>
+        <td className="p-3 text-right text-sm">{Number(line.prix_unitaire).toFixed(2)} DH</td>
+        <td className="p-3 text-right font-medium text-sm">{Number(line.montant_ht).toFixed(2)} DH</td>
+        <td className="p-3 text-center text-nowrap">
+          <button onClick={() => setEditingLine(line)} className="text-blue-600 hover:bg-blue-50 p-1 rounded mx-1">
+            <Edit className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={() => {
+              if (window.confirm('Supprimer cette ligne ?')) deleteLineMutation.mutate(line.id);
+            }} 
+            className="text-red-600 hover:bg-red-50 p-1 rounded mx-1"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </td>
+      </tr>
+    );
+  };
+
+  const renderSection = (title: string, lines: TrackingLine[], groupId?: number) => {
+    if (lines.length === 0 && !groupId) return null;
+    
+    const subTotal = lines.reduce((sum, line) => {
+      const montant = Number(line.montant_ht) || 0;
+      return sum + montant;
+    }, 0);
+
+    const isEditingThisGroup = editingGroupId === groupId;
+
+    return (
+      <div className="mb-4 bg-white border rounded-lg overflow-hidden shadow-sm">
+        <div className="bg-gray-100 p-3 border-b flex justify-between items-center">
+          <div className="flex items-center flex-1">
+            {isEditingThisGroup && groupId ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={editingGroupName}
+                  onChange={(e) => setEditingGroupName(e.target.value)}
+                  className="p-1 border rounded text-sm font-semibold"
+                  autoFocus
+                />
+                <button 
+                  onClick={() => handleUpdateGroup(groupId)}
+                  className="text-green-600 hover:bg-green-100 p-1 rounded"
+                >
+                  <Save className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => {
+                    setEditingGroupId(null);
+                    setEditingGroupName('');
+                  }}
+                  className="text-gray-500 hover:bg-gray-200 p-1 rounded"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <h4 className="font-semibold text-gray-700 flex items-center">
+                  {title}
+                  {groupId && (
+                    <button
+                      onClick={() => {
+                        setEditingGroupId(groupId);
+                        setEditingGroupName(title);
+                      }}
+                      className="ml-2 text-blue-600 hover:bg-blue-50 p-1 rounded"
+                      title="Modifier le nom du groupe"
+                    >
+                      <Edit className="w-3 h-3" />
+                    </button>
+                  )}
+                </h4>
+              </>
+            )}
+            <span className="ml-2 text-xs font-normal text-gray-500 bg-white px-2 py-0.5 rounded-full border">
+              {lines.length} ligne{lines.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-bold text-gray-700">
+              S/Total: {subTotal.toFixed(2)} DH
+            </span>
+            {groupId && (
+              <button 
+                onClick={() => {
+                  if(window.confirm('Supprimer ce groupe ? Les lignes deviendront sans groupe.')) 
+                    deleteGroupMutation.mutate(groupId);
+                }}
+                className="text-red-500 hover:text-red-700"
+                title="Supprimer le groupe"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="text-xs text-gray-500 border-b bg-gray-50/50">
+                <th className="p-2 pl-3">Désignation</th>
+                <th className="p-2 text-right">Qté</th>
+                <th className="p-2 text-right">P.U.</th>
+                <th className="p-2 text-right">Total HT</th>
+                <th className="p-2 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.length === 0 ? (
+                <tr><td colSpan={5} className="p-4 text-center text-gray-400 italic text-sm">Aucune ligne dans ce groupe</td></tr>
+              ) : (
+                lines.map(renderLineRow)
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const currentTotalHt = lines.reduce((sum, line) => sum + Number(line.montant_ht || 0), 0);
   const variance = currentTotalHt - initialTotalHt;
+
+
+  const ungroupedLines = groupedLines.get('ungrouped') || [];
 
   if (!isOpen) return null;
 
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
+        {/* Header */}
         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-          <h3 className="text-xl font-semibold text-gray-800">
-            Suivi des lignes - Devis {quoteNumber}
-          </h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">Suivi des lignes - Devis {quoteNumber}</h2>
+            <p className="text-sm text-gray-500">Gérez les lignes de suivi avec leur structure en groupes</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1 hover:bg-gray-200 rounded-full transition">
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto p-4">
-          <table className="w-full">
-            <thead className="bg-gray-50 sticky top-0">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-24">Qté</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-32">P.U (DH)</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-32">Total HT</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase w-24">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {lines.map((line, index) => (
-                <tr key={line.id} className={`${highlightedEditedIds.has(line.id) ? 'bg-yellow-100' : highlightedAddedIds.has(line.id) ? 'bg-blue-100' : ''}`}>
-                  <td className="px-4 py-2">
-                    <input
-                      type="text"
-                      value={line.designation}
-                      onChange={(e) => handleUpdateLine(index, 'designation', e.target.value)}
-                      className="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <input
-                      type="number"
-                      value={line.quantite}
-                      onChange={(e) => handleUpdateLine(index, 'quantite', Number(e.target.value))}
-                      className="w-full text-right border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <input
-                      type="number"
-                      value={line.prix_unitaire}
-                      readOnly
-                      disabled
-                      aria-readonly="true"
-                      className="w-full text-right border-gray-200 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed"
-                    />
-                  </td>
-                  <td className="px-4 py-2 text-right font-medium">
-                    {(line.quantite * line.prix_unitaire).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-2 flex justify-center space-x-2">
-                    <button
-                        onClick={() => saveLine(line)}
-                        className="text-blue-600 hover:text-blue-900"
-                        title="Enregistrer"
-                    >
-                        <Save className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => deleteLineMutation.mutate(line.id)}
-                      className="text-red-600 hover:text-red-900"
-                      title="Supprimer"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              
-              {/* Add New Line Row */}
-              <tr className="bg-blue-50">
-                <td className="px-4 py-2">
+        <div className="flex-1 overflow-y-auto bg-gray-50/50 p-4">
+          {/* Main Form */}
+          <div className="bg-white p-4 rounded-lg border shadow-sm mb-6">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center">
+              <Plus className="w-4 h-4 mr-2 text-blue-600" />
+              Ajouter une nouvelle ligne
+            </h3>
+            <form onSubmit={handleAddLine}>
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                <div className="md:col-span-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Désignation</label>
                   <input
                     type="text"
-                    placeholder="Nouvelle désignation"
                     value={newLine.designation}
                     onChange={(e) => setNewLine({ ...newLine, designation: e.target.value })}
-                    className="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="Ex: Câble réseau..."
+                    required
                   />
-                </td>
-                <td className="px-4 py-2">
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={newLine.quantite}
-                    onChange={(e) => setNewLine({ ...newLine, quantite: Number(e.target.value) })}
-                    className="w-full text-right border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    value={newLine.prix_unitaire}
-                    onChange={(e) => setNewLine({ ...newLine, prix_unitaire: Number(e.target.value) })}
-                    className="w-full text-right border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
-                </td>
-                <td className="px-4 py-2 text-right text-gray-500">
-                  -
-                </td>
-                <td className="px-4 py-2 text-center">
-                  <button
-                    onClick={() => createLineMutation.mutate(newLine)}
-                    disabled={!newLine.designation}
-                    className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                </div>
+                <div className="md:col-span-3">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Groupe (Optionnel)</label>
+                  <select
+                    value={newLine.group}
+                    onChange={(e) => setNewLine({ ...newLine, group: e.target.value })}
+                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                   >
-                    <Plus className="w-6 h-6" />
+                    <option value="">-- Aucun groupe --</option>
+                    {groups.map(g => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Quantité</label>
+                  <input
+                    type="number"
+                    value={newLine.quantite}
+                    onChange={(e) => setNewLine({ ...newLine, quantite: Math.max(1, parseInt(e.target.value) || 1) })}
+                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 text-sm text-right"
+                    required
+                    min="1"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Prix Unitaire</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newLine.prix_unitaire}
+                    onChange={(e) => setNewLine({ ...newLine, prix_unitaire: parseFloat(e.target.value) || 0 })}
+                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 text-sm text-right"
+                    required
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <button
+                    type="submit"
+                    disabled={createLineMutation.isLoading}
+                    className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 flex items-center justify-center transition"
+                  >
+                    <Plus className="w-5 h-5" />
                   </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          
-          <div className="mt-4 p-4 bg-gray-100 rounded-md flex justify-between items-center">
-            <div className="text-sm text-gray-600">
-                <div>Total Initial (Devis): <span className="font-semibold">{initialTotalHt.toFixed(2)} DH</span></div>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          {/* Group Management */}
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">Contenu du suivi</h3>
+            {!showGroupInput ? (
+              <button 
+                onClick={() => setShowGroupInput(true)}
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 transition"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Créer un groupe
+              </button>
+            ) : (
+              <form onSubmit={handleAddGroup} className="flex gap-2 animate-in fade-in slide-in-from-right-4">
+                <input 
+                  type="text" 
+                  autoFocus
+                  placeholder="Nom du groupe..." 
+                  value={newGroupName}
+                  onChange={e => setNewGroupName(e.target.value)}
+                  className="text-sm p-1.5 border rounded w-48 focus:ring-2 focus:ring-blue-500"
+                />
+                <button type="submit" className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">OK</button>
+                <button type="button" onClick={() => setShowGroupInput(false)} className="bg-gray-200 text-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-300">X</button>
+              </form>
+            )}
+          </div>
+
+          {/* Render Groups and Lines */}
+          {isLoading ? (
+            <div className="p-8 text-center text-gray-500">Chargement...</div>
+          ) : (
+            <div className="space-y-4">
+              {/* Groups first */}
+              {groups.map(group => (
+                <div key={group.id}>
+                  {renderSection(group.name, groupedLines.get(group.id) || [], group.id)}
+                </div>
+              ))}
+
+              {/* Ungrouped Lines (Last, only if present) */}
+              {ungroupedLines.length > 0 && renderSection("Lignes sans groupe", ungroupedLines)}
+
+              {lines.length === 0 && groups.length === 0 && (
+                <div className="text-center py-12 border-2 border-dashed rounded-lg bg-gray-50">
+                  <p className="text-gray-500 mb-2">Le suivi est vide.</p>
+                  <p className="text-sm text-gray-400">Ajoutez des lignes via le formulaire ci-dessus.</p>
+                </div>
+              )}
             </div>
-            
-            <div className="flex items-center space-x-6">
+          )}
+
+          {/* Summary Section */}
+          <div className="mt-6 p-4 bg-white rounded-lg border shadow-sm">
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-gray-600">
+                <div>Total Initial (Devis): <span className="font-semibold">{initialTotalHt.toFixed(2)} DH</span></div>
+              </div>
+              
+              <div className="flex items-center space-x-6">
                 <div className={`px-4 py-2 rounded-md font-bold text-lg flex items-center ${
-                    variance > 0 ? 'bg-green-100 text-green-700' :
-                    variance < 0 ? 'bg-red-100 text-red-700' :
-                    'bg-gray-200 text-gray-700'
+                  variance > 0 ? 'bg-green-100 text-green-700' :
+                  variance < 0 ? 'bg-red-100 text-red-700' :
+                  'bg-gray-200 text-gray-700'
                 }`}>
-                    <span className="mr-2">Écart:</span>
-                    {variance > 0 && '+'}
-                    {variance.toFixed(2)} DH
+                  <span className="mr-2">Écart:</span>
+                  {variance > 0 && '+'}
+                  {variance.toFixed(2)} DH
                 </div>
                 
                 <div className="text-lg font-bold">
-                    Total HT Réel: {currentTotalHt.toFixed(2)} DH
+                  Total HT Réel: {currentTotalHt.toFixed(2)} DH
                 </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="p-4 border-t bg-gray-50 flex justify-end">
+        <div className="p-4 border-t bg-white flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+            className="px-6 py-2 bg-gray-800 text-white rounded hover:bg-gray-900 transition shadow-sm"
           >
             Fermer
           </button>

@@ -28,6 +28,19 @@ interface DeliveryLine {
   prix_unitaire: number;
 }
 
+interface QuoteGroup {
+  id: number;
+  name: string;
+  lines: DeliveryLine[];
+  total_ht: number;
+}
+
+interface InvoicePreview {
+  groups: QuoteGroup[];
+  ungrouped_lines: DeliveryLine[];
+  has_groups: boolean;
+}
+
 interface Document {
     id_document: number;
     name: string;
@@ -65,11 +78,11 @@ export const Invoices = () => {
         ).sort((a: Document, b: Document) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     }, [documents]);
 
-    // Fetch Preview Lines (Same as Delivery Logic)
-    const { data: lines = [], isLoading: isLoadingLines } = useQuery<DeliveryLine[]>(
+    // Fetch Preview Data (Grouped Structure)
+    const { data: previewData, isLoading: isLoadingLines } = useQuery<InvoicePreview>(
         ['delivery-preview', selectedQuoteId], 
         async () => {
-             if (!selectedQuoteId) return [];
+             if (!selectedQuoteId) return { groups: [], ungrouped_lines: [], has_groups: false };
              const response = await api.get(`/quotes/${selectedQuoteId}/delivery-preview/`);
              return response.data;
         },
@@ -242,14 +255,14 @@ export const Invoices = () => {
                         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-full flex flex-col">
                             <div className="p-6 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
                                 <h2 className="text-lg font-semibold text-gray-800">Aperçu du contenu</h2>
-                                {lines.length > 0 && !isLoadingLines && (
+                                {previewData && !isLoadingLines && (
                                     <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
-                                        {lines.length} articles
+                                        {previewData.groups.reduce((sum, g) => sum + g.lines.length, 0) + previewData.ungrouped_lines.length} articles
                                     </span>
                                 )}
                             </div>
                             
-                            <div className="flex-1 p-6">
+                            <div className="flex-1 p-6 overflow-y-auto">
                                 {isLoadingLines ? (
                                     <div className="h-40 flex items-center justify-center text-gray-500">
                                         Chargement de l'aperçu...
@@ -259,43 +272,102 @@ export const Invoices = () => {
                                         <FileText className="w-12 h-12 mb-4 opacity-50" />
                                         <p>Veuillez sélectionner un devis pour voir l'aperçu</p>
                                     </div>
-                                ) : lines.length === 0 ? (
+                                ) : !previewData || (previewData.groups.length === 0 && previewData.ungrouped_lines.length === 0) ? (
                                     <div className="p-8 text-center text-gray-500 bg-yellow-50 rounded-lg">
                                         <AlertCircle className="w-8 h-8 mx-auto mb-2 text-yellow-500" />
                                         Aucun article trouvé pour ce devis.
                                     </div>
                                 ) : (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left">
-                                            <thead>
-                                                <tr className="border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                                    <th className="py-3 px-2">Désignation</th>
-                                                    <th className="py-3 px-2 text-center">Quantité</th>
-                                                    <th className="py-3 px-2 text-right">P.U (HT)</th>
-                                                    <th className="py-3 px-2 text-right">Total (HT)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {lines.map((line, idx) => (
-                                                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                                                        <td className="py-3 px-2 text-sm text-gray-900 font-medium">{line.designation}</td>
-                                                        <td className="py-3 px-2 text-sm text-center text-gray-600">{line.quantite}</td>
-                                                        <td className="py-3 px-2 text-sm text-right text-gray-600">{formatCurrency(line.prix_unitaire)}</td>
-                                                        <td className="py-3 px-2 text-sm text-right text-gray-900 font-medium">
-                                                            {formatCurrency(line.quantite * line.prix_unitaire)}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                            <tfoot className="bg-gray-50">
-                                                <tr>
-                                                    <td colSpan={3} className="py-3 px-4 text-right font-bold text-gray-700">Total HT Estimé:</td>
-                                                    <td className="py-3 px-2 text-right font-bold text-blue-600">
-                                                        {formatCurrency(lines.reduce((acc, l) => acc + (l.quantite * l.prix_unitaire), 0))}
-                                                    </td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
+                                    <div className="space-y-4">
+                                        {/* Render Groups */}
+                                        {previewData.groups.map((group, groupIdx) => (
+                                            <div key={groupIdx} className="border rounded-lg overflow-hidden">
+                                                <div className="bg-gray-100 px-4 py-2 flex justify-between items-center">
+                                                    <h4 className="font-semibold text-gray-700">{group.name}</h4>
+                                                    <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded-full border">
+                                                        {group.lines.length} ligne{group.lines.length > 1 ? 's' : ''}
+                                                    </span>
+                                                </div>
+                                                <table className="w-full text-left">
+                                                    <thead>
+                                                        <tr className="border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">
+                                                            <th className="py-2 px-3">Désignation</th>
+                                                            <th className="py-2 px-3 text-center">Qté</th>
+                                                            <th className="py-2 px-3 text-right">P.U (HT)</th>
+                                                            <th className="py-2 px-3 text-right">Total (HT)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {group.lines.map((line, lineIdx) => (
+                                                            <tr key={lineIdx} className="hover:bg-gray-50 transition-colors">
+                                                                <td className="py-2 px-3 text-sm text-gray-900">{line.designation}</td>
+                                                                <td className="py-2 px-3 text-sm text-center text-gray-600">{line.quantite}</td>
+                                                                <td className="py-2 px-3 text-sm text-right text-gray-600">{formatCurrency(line.prix_unitaire)}</td>
+                                                                <td className="py-2 px-3 text-sm text-right text-gray-900 font-medium">
+                                                                    {formatCurrency(line.quantite * line.prix_unitaire)}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                    <tfoot className="bg-gray-50 border-t">
+                                                        <tr>
+                                                            <td colSpan={3} className="py-2 px-3 text-right text-sm font-semibold text-gray-700">S/Total:</td>
+                                                            <td className="py-2 px-3 text-right text-sm font-bold text-gray-900">
+                                                                {formatCurrency(group.lines.reduce((acc, l) => acc + (l.quantite * l.prix_unitaire), 0))}
+                                                            </td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        ))}
+
+                                        {/* Render Ungrouped Lines */}
+                                        {previewData.ungrouped_lines.length > 0 && (
+                                            <div className="border rounded-lg overflow-hidden">
+                                                <div className="bg-gray-100 px-4 py-2 flex justify-between items-center">
+                                                    <h4 className="font-semibold text-gray-700">Lignes sans groupe</h4>
+                                                    <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded-full border">
+                                                        {previewData.ungrouped_lines.length} ligne{previewData.ungrouped_lines.length > 1 ? 's' : ''}
+                                                    </span>
+                                                </div>
+                                                <table className="w-full text-left">
+                                                    <thead>
+                                                        <tr className="border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">
+                                                            <th className="py-2 px-3">Désignation</th>
+                                                            <th className="py-2 px-3 text-center">Qté</th>
+                                                            <th className="py-2 px-3 text-right">P.U (HT)</th>
+                                                            <th className="py-2 px-3 text-right">Total (HT)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100">
+                                                        {previewData.ungrouped_lines.map((line, lineIdx) => (
+                                                            <tr key={lineIdx} className="hover:bg-gray-50 transition-colors">
+                                                                <td className="py-2 px-3 text-sm text-gray-900">{line.designation}</td>
+                                                                <td className="py-2 px-3 text-sm text-center text-gray-600">{line.quantite}</td>
+                                                                <td className="py-2 px-3 text-sm text-right text-gray-600">{formatCurrency(line.prix_unitaire)}</td>
+                                                                <td className="py-2 px-3 text-sm text-right text-gray-900 font-medium">
+                                                                    {formatCurrency(line.quantite * line.prix_unitaire)}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+
+                                        {/* Total Global */}
+                                        <div className="bg-gray-50 border rounded-lg p-4">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-lg font-bold text-gray-700">Total HT Estimé:</span>
+                                                <span className="text-xl font-bold text-blue-600">
+                                                    {formatCurrency(
+                                                        previewData.groups.reduce((sum, g) => 
+                                                            sum + g.lines.reduce((lineSum, l) => lineSum + (l.quantite * l.prix_unitaire), 0), 0
+                                                        ) + previewData.ungrouped_lines.reduce((sum, l) => sum + (l.quantite * l.prix_unitaire), 0)
+                                                    )}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -305,11 +377,11 @@ export const Invoices = () => {
                                 <button
                                     onClick={() => selectedQuoteId && generateMutation.mutate(selectedQuoteId)}
                                     className={`flex items-center px-6 py-3 rounded-lg font-medium text-white shadow-sm transition-all ${
-                                        !selectedQuoteId || isLoadingLines || lines.length === 0
+                                        !selectedQuoteId || isLoadingLines || !previewData || (previewData.groups.length === 0 && previewData.ungrouped_lines.length === 0)
                                         ? 'bg-gray-300 cursor-not-allowed'
                                         : 'bg-green-600 hover:bg-green-700 hover:shadow-md'
                                     }`}
-                                    disabled={!selectedQuoteId || isLoadingLines || lines.length === 0 || generateMutation.isLoading}
+                                    disabled={!selectedQuoteId || isLoadingLines || !previewData || (previewData.groups.length === 0 && previewData.ungrouped_lines.length === 0) || generateMutation.isLoading}
                                 >
                                     {generateMutation.isLoading ? (
                                         <>Génération en cours...</>

@@ -12,7 +12,9 @@ import {
   Calendar,
   LayoutGrid,
   List,
-  DollarSign
+  DollarSign,
+  FileText,
+  Download
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -51,6 +53,11 @@ export const Suppliers = () => {
   const [error, setError] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('ALL');
+  
+  // PDF Report State
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // Forms
   const [supplierForm, setSupplierForm] = useState<Partial<Supplier>>({
@@ -162,6 +169,35 @@ export const Suppliers = () => {
       setIsPurchaseModalOpen(true);
   };
 
+  // --- PDF GENERATION ---
+  const handleDownloadMonthlyPDF = async () => {
+    try {
+      setIsGeneratingPDF(true);
+      const response = await api.get('/suppliers/invoices/monthly-report-pdf/', {
+        params: { year: selectedYear, month: selectedMonth },
+        responseType: 'blob'
+      });
+      
+      const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                         'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+      const filename = `Achats_Fournisseurs_${monthNames[selectedMonth - 1]}_${selectedYear}.pdf`;
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError({ message: 'Erreur lors de la génération du PDF' });
+      console.error('PDF generation error:', err);
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header & Tabs */}
@@ -221,9 +257,59 @@ export const Suppliers = () => {
                            </button>
                        </>
                    ) : (
-                       <button onClick={() => openPurchaseModal()} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                           <Plus className="w-4 h-4 mr-2" /> Nouvelle Facture Achat
-                       </button>
+                       <>
+                           {/* Month Selector */}
+                           <select 
+                                className="px-3 py-2 border rounded-lg bg-gray-50 text-sm outline-none"
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                           >
+                               <option value={1}>Janvier</option>
+                               <option value={2}>Février</option>
+                               <option value={3}>Mars</option>
+                               <option value={4}>Avril</option>
+                               <option value={5}>Mai</option>
+                               <option value={6}>Juin</option>
+                               <option value={7}>Juillet</option>
+                               <option value={8}>Août</option>
+                               <option value={9}>Septembre</option>
+                               <option value={10}>Octobre</option>
+                               <option value={11}>Novembre</option>
+                               <option value={12}>Décembre</option>
+                           </select>
+                           
+                           {/* Year Selector */}
+                           <select 
+                                className="px-3 py-2 border rounded-lg bg-gray-50 text-sm outline-none"
+                                value={selectedYear}
+                                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                           >
+                               {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                                   <option key={year} value={year}>{year}</option>
+                               ))}
+                           </select>
+                           
+                           {/* PDF Download Button */}
+                           <button 
+                               onClick={handleDownloadMonthlyPDF}
+                               disabled={isGeneratingPDF}
+                               className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                           >
+                               {isGeneratingPDF ? (
+                                   <>
+                                       <FileText className="w-4 h-4 mr-2 animate-spin" /> Génération...
+                                   </>
+                               ) : (
+                                   <>
+                                       <Download className="w-4 h-4 mr-2" /> PDF Mensuel
+                                   </>
+                               )}
+                           </button>
+                           
+                           <button onClick={() => openPurchaseModal()} className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                               <Plus className="w-4 h-4 mr-2" /> Nouvelle Facture Achat
+                           </button>
+                       </>
                    )}
                </div>
           </div>

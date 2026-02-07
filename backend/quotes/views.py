@@ -1,8 +1,8 @@
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from core.views import BaseViewSet
-from .models import Quote, QuoteLine, QuoteTracking, QuoteTrackingLine, QuoteGroup
-from .serializers import QuoteSerializer, QuoteLineSerializer, QuoteTrackingSerializer, QuoteTrackingLineSerializer, QuoteGroupSerializer
+from .models import Quote, QuoteLine, QuoteTracking, QuoteTrackingLine, QuoteGroup, QuoteTrackingGroup
+from .serializers import QuoteSerializer, QuoteLineSerializer, QuoteTrackingSerializer, QuoteTrackingLineSerializer, QuoteGroupSerializer, QuoteTrackingGroupSerializer
 from documents.models import Document
 from django.core.files.base import ContentFile
 from django.http import HttpResponse
@@ -338,14 +338,30 @@ class QuoteViewSet(BaseViewSet):
 
     @action(detail=True, methods=['get'], url_path='delivery-preview')
     def get_delivery_preview(self, request, pk=None):
+        """Retourne les données du devis avec groupes et lignes pour l'aperçu du BL"""
         quote = self.get_object()
         tracking = QuoteTracking.objects.filter(quote=quote).order_by('-created_at').first()
-        lines_data = []
+        
+        # Si on a un tracking, on utilise ses données, sinon on utilise le devis original
         if tracking:
-            lines_data = QuoteTrackingLineSerializer(tracking.lines.all(), many=True).data
+            serializer = QuoteTrackingSerializer(tracking)
         else:
-            lines_data = QuoteLineSerializer(quote.lines.all(), many=True).data
-        return Response(lines_data)
+            # Créer une structure similaire à partir du devis
+            groups_data = QuoteGroupSerializer(quote.groups.all(), many=True).data
+            ungrouped_lines = quote.lines.filter(group__isnull=True)
+            ungrouped_data = QuoteLineSerializer(ungrouped_lines, many=True).data
+            
+            return Response({
+                'groups': groups_data,
+                'ungrouped_lines': ungrouped_data,
+                'has_groups': quote.groups.exists()
+            })
+        
+        return Response({
+            'groups': serializer.data.get('groups', []),
+            'ungrouped_lines': serializer.data.get('ungrouped_lines', []),
+            'has_groups': len(serializer.data.get('groups', [])) > 0
+        })
 
     @action(detail=True, methods=['post'], url_path='generate-delivery-note')
     def generate_delivery_note(self, request, pk=None):
@@ -484,27 +500,10 @@ class QuoteViewSet(BaseViewSet):
             elements.append(info_table)
             elements.append(Spacer(1, 20))
             
-            # --- 3. Delivery Table ---
-            # Columns: Désignation, Quantité, P.U (HT), Total (HT)
+            # --- 3. Delivery Table with Groups Support ---
             data = [['Désignation', 'Qté', 'P.U (HT)', 'Total (HT)']]
             
-            total_ht_calc = 0
-            for line in lines:
-                montant_ht = line.quantite * line.prix_unitaire
-                total_ht_calc += montant_ht
-                data.append([
-                    Paragraph(line.designation, normal_style),
-                    str(line.quantite),
-                    f"{line.prix_unitaire:,.2f}",
-                    f"{montant_ht:,.2f}"
-                ])
-            
-            # Table Styling
-            col_widths = [available_width * 0.55, available_width * 0.1, available_width * 0.15, available_width * 0.2]
-            
-            t = Table(data, colWidths=col_widths)
-            t.setStyle(TableStyle([
-                # Header Row
+            style_cmds = [
                 ('BACKGROUND', (0, 0), (-1, 0), COLOR_PRIMARY),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
@@ -512,15 +511,57 @@ class QuoteViewSet(BaseViewSet):
                 ('FONTSIZE', (0, 0), (-1, 0), 10),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
                 ('TOPPADDING', (0, 0), (-1, 0), 10),
-                
-                # Data Rows
-                ('ALIGN', (1, 1), (-1, -1), 'RIGHT'), # Numbers right aligned
+                ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdc3c7')),
                 ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
                 ('FONTSIZE', (0, 1), (-1, -1), 9),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_LIGHT_GRAY]),
-            ]))
+            ]
+            
+            groups = []
+            has_groups = False
+            if tracking:
+                groups = tracking.groups.all().order_by('order', 'id')
+                has_groups = groups.exists()
+            else:
+                groups = quote.groups.all().order_by('order', 'id')
+                has_groups = groups.exists()
+            
+            current_row = 1
+            total_ht_calc = 0
+            
+            def add_line_row(line):
+                nonlocal current_row, total_ht_calc
+                montant_ht = line.quantite * line.prix_unitaire
+                total_ht_calc += montant_ht
+                data.append([Paragraph(line.designation, normal_style), str(line.quantite), f"{line.prix_unitaire:,.2f}", f"{montant_ht:,.2f}"])
+                current_row += 1
+            
+            if not has_groups:
+                for line in lines:
+                    add_line_row(line)
+            else:
+                ungrouped_lines = lines.filter(group__isnull=True)
+                for group in groups:
+                    data.append([Paragraph(f"<b>{group.name}</b>", normal_style), "", "", ""])
+                    style_cmds.append(('SPAN', (0, current_row), (-1, current_row)))
+                    style_cmds.append(('BACKGROUND', (0, current_row), (-1, current_row), colors.HexColor('#ecf0f1')))
+                    style_cmds.append(('ALIGN', (0, current_row), (-1, current_row), 'LEFT'))
+                    current_row += 1
+                    for line in group.lines.all():
+                        add_line_row(line)
+                if ungrouped_lines.exists():
+                    data.append([Paragraph("<b>Divers / Général</b>", normal_style), "", "", ""])
+                    style_cmds.append(('SPAN', (0, current_row), (-1, current_row)))
+                    style_cmds.append(('BACKGROUND', (0, current_row), (-1, current_row), colors.HexColor('#ecf0f1')))
+                    style_cmds.append(('ALIGN', (0, current_row), (-1, current_row), 'LEFT'))
+                    current_row += 1
+                    for line in ungrouped_lines:
+                        add_line_row(line)
+            
+            col_widths = [available_width * 0.55, available_width * 0.1, available_width * 0.15, available_width * 0.2]
+            t = Table(data, colWidths=col_widths)
+            t.setStyle(TableStyle(style_cmds))
             elements.append(t)
             elements.append(Spacer(1, 15))
 
@@ -799,33 +840,16 @@ class QuoteViewSet(BaseViewSet):
             info_table = Table(info_data, colWidths=[available_width/2, available_width/2])
             info_table.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                ('LEFTPADDING', (0,0), (0,0), 0),   # Left col padding
-                ('LEFTPADDING', (1,0), (1,0), 20),  # Right col padding
+                ('LEFTPADDING', (0,0), (0,0), 0),
+                ('LEFTPADDING', (1,0), (1,0), 20),
             ]))
             elements.append(info_table)
             elements.append(Spacer(1, 20))
             
-            # --- 3. Delivery Table ---
-            # Columns: Désignation, Quantité, P.U (HT), Total (HT)
+            # --- 3. Delivery Table with Groups Support ---
             data = [['Désignation', 'Qté', 'P.U (HT)', 'Total (HT)']]
             
-            total_ht_calc = 0
-            for line in lines:
-                montant_ht = line.quantite * line.prix_unitaire
-                total_ht_calc += montant_ht
-                data.append([
-                    Paragraph(line.designation, normal_style),
-                    str(line.quantite),
-                    f"{line.prix_unitaire:,.2f}",
-                    f"{montant_ht:,.2f}"
-                ])
-            
-            # Table Styling
-            col_widths = [available_width * 0.55, available_width * 0.1, available_width * 0.15, available_width * 0.2]
-            
-            t = Table(data, colWidths=col_widths)
-            t.setStyle(TableStyle([
-                # Header Row
+            style_cmds = [
                 ('BACKGROUND', (0, 0), (-1, 0), COLOR_PRIMARY),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
@@ -833,15 +857,57 @@ class QuoteViewSet(BaseViewSet):
                 ('FONTSIZE', (0, 0), (-1, 0), 10),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
                 ('TOPPADDING', (0, 0), (-1, 0), 10),
-                
-                # Data Rows
-                ('ALIGN', (1, 1), (-1, -1), 'RIGHT'), # Numbers right aligned
+                ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdc3c7')),
                 ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
                 ('FONTSIZE', (0, 1), (-1, -1), 9),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_LIGHT_GRAY]),
-            ]))
+            ]
+            
+            groups = []
+            has_groups = False
+            if tracking:
+                groups = tracking.groups.all().order_by('order', 'id')
+                has_groups = groups.exists()
+            else:
+                groups = quote.groups.all().order_by('order', 'id')
+                has_groups = groups.exists()
+            
+            current_row = 1
+            total_ht_calc = 0
+            
+            def add_line_row(line):
+                nonlocal current_row, total_ht_calc
+                montant_ht = line.quantite * line.prix_unitaire
+                total_ht_calc += montant_ht
+                data.append([Paragraph(line.designation, normal_style), str(line.quantite), f"{line.prix_unitaire:,.2f}", f"{montant_ht:,.2f}"])
+                current_row += 1
+            
+            if not has_groups:
+                for line in lines:
+                    add_line_row(line)
+            else:
+                ungrouped_lines = lines.filter(group__isnull=True)
+                for group in groups:
+                    data.append([Paragraph(f"<b>{group.name}</b>", normal_style), "", "", ""])
+                    style_cmds.append(('SPAN', (0, current_row), (-1, current_row)))
+                    style_cmds.append(('BACKGROUND', (0, current_row), (-1, current_row), colors.HexColor('#ecf0f1')))
+                    style_cmds.append(('ALIGN', (0, current_row), (-1, current_row), 'LEFT'))
+                    current_row += 1
+                    for line in group.lines.all():
+                        add_line_row(line)
+                if ungrouped_lines.exists():
+                    data.append([Paragraph("<b>Divers / Général</b>", normal_style), "", "", ""])
+                    style_cmds.append(('SPAN', (0, current_row), (-1, current_row)))
+                    style_cmds.append(('BACKGROUND', (0, current_row), (-1, current_row),colors.HexColor('#ecf0f1')))
+                    style_cmds.append(('ALIGN', (0, current_row), (-1, current_row), 'LEFT'))
+                    current_row += 1
+                    for line in ungrouped_lines:
+                        add_line_row(line)
+            
+            col_widths = [available_width * 0.55, available_width * 0.1, available_width * 0.15, available_width * 0.2]
+            t = Table(data, colWidths=col_widths)
+            t.setStyle(TableStyle(style_cmds))
             elements.append(t)
             elements.append(Spacer(1, 15))
 
@@ -1017,6 +1083,14 @@ class QuoteGroupViewSet(BaseViewSet):
     serializer_class = QuoteGroupSerializer
     module_name = 'quote_groups'
     filterset_fields = ['quote']
+    pagination_class = None
+
+
+class QuoteTrackingGroupViewSet(BaseViewSet):
+    queryset = QuoteTrackingGroup.objects.all()
+    serializer_class = QuoteTrackingGroupSerializer
+    module_name = 'quote_tracking_groups'
+    filterset_fields = ['tracking']
     pagination_class = None
 
 
