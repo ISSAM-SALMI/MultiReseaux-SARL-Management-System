@@ -18,6 +18,10 @@ interface TrackingLine {
   montant_ht: number;
   tracking: number;
   group: number | null;
+  change_status?: 'unchanged' | 'modified' | 'new';
+  original_designation?: string;
+  original_quantite?: number;
+  original_prix_unitaire?: number;
 }
 
 interface TrackingLinesModalProps {
@@ -48,13 +52,19 @@ export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, i
     async () => {
       try {
         const response = await api.get(`/quotes/tracking-lines/?tracking=${trackingId}`);
-        return response.data.results || response.data;
+        const data = response.data.results || response.data;
+        const linesData = Array.isArray(data) ? data : [];
+        return linesData;
       } catch (e) {
         console.warn('Tracking lines API error', e);
         return [];
       }
     },
-    { enabled: isOpen && !!trackingId }
+    { 
+      enabled: isOpen && !!trackingId,
+      refetchOnMount: true,
+      refetchOnWindowFocus: false
+    }
   );
 
   // Fetch Groups
@@ -79,7 +89,8 @@ export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, i
     (line: any) => api.post('/quotes/tracking-lines/', { 
         ...line, 
         tracking: trackingId,
-        group: line.group === '' ? null : line.group 
+        group: line.group === '' ? null : line.group,
+        change_status: 'new' // Explicitement marqué comme nouveau
     }),
     {
       onSuccess: () => {
@@ -93,10 +104,30 @@ export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, i
   const updateLineMutation = useMutation(
     (line: any) => api.patch(`/quotes/tracking-lines/${line.id}/`, line),
     {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['tracking-lines', trackingId]);
+      onSuccess: async (response) => {
+        // Update cache immediately with the returned data to prevent jumping and show highlight
+        const updatedLine = response.data;
+        queryClient.setQueryData<TrackingLine[]>(['tracking-lines', trackingId], (oldLines) => {
+          if (!oldLines) return [];
+          return oldLines.map(line => line.id === updatedLine.id ? updatedLine : line);
+        });
+        
+        await queryClient.invalidateQueries(['tracking-lines', trackingId]);
         setEditingLine(null);
       },
+    }
+  );
+
+  const resetTrackingMutation = useMutation(
+    () => api.post('/quotes/tracking-lines/reset-tracking/', { tracking_id: trackingId }),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['tracking-lines', trackingId]);
+        alert('Suivi des modifications réinitialisé avec succès !');
+      },
+      onError: (error: any) => {
+        alert('Erreur lors de la réinitialisation: ' + (error.response?.data?.error || error.message));
+      }
     }
   );
 
@@ -199,9 +230,22 @@ export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, i
   const renderLineRow = (line: TrackingLine) => {
     const isEditing = editingLine?.id === line.id && !!editingLine;
     
+    // Déterminer la classe de couleur selon le statut de modification
+    const getRowColorClass = () => {
+      if (isEditing) return 'bg-gray-100';
+      switch (line.change_status) {
+        case 'new':
+          return 'bg-blue-50 border-l-4 border-blue-500';
+        case 'modified':
+          return 'bg-green-50 border-l-4 border-green-500';
+        default:
+          return 'hover:bg-gray-50';
+      }
+    };
+    
     if (isEditing) {
       return (
-        <tr key={line.id} className="bg-blue-50">
+        <tr key={line.id} className="bg-gray-100">
           <td className="p-2">
             <input
               type="text"
@@ -244,10 +288,31 @@ export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, i
     }
 
     return (
-      <tr key={line.id} className="hover:bg-gray-50 border-b last:border-0 border-gray-100">
-        <td className="p-3 text-sm">{line.designation}</td>
-        <td className="p-3 text-right text-sm">{line.quantite}</td>
-        <td className="p-3 text-right text-sm">{Number(line.prix_unitaire).toFixed(2)} DH</td>
+      <tr key={line.id} className={`${getRowColorClass()} border-b last:border-0 border-gray-100 transition-colors`}>
+        <td className="p-3 text-sm">
+          {line.designation}
+          {line.change_status === 'modified' && line.original_designation && (
+             <div className="text-xs text-gray-500 italic mt-1">
+               Avant: {line.original_designation}
+             </div>
+           )}
+        </td>
+        <td className="p-3 text-right text-sm">
+          {line.quantite}
+          {line.change_status === 'modified' && line.original_quantite && (
+             <div className="text-xs text-gray-500 italic">
+               ({line.original_quantite})
+             </div>
+           )}
+        </td>
+        <td className="p-3 text-right text-sm">
+          {Number(line.prix_unitaire).toFixed(2)} DH
+          {line.change_status === 'modified' && line.original_prix_unitaire && (
+             <div className="text-xs text-gray-500 italic">
+               ({Number(line.original_prix_unitaire).toFixed(2)} DH)
+             </div>
+           )}
+        </td>
         <td className="p-3 text-right font-medium text-sm">{Number(line.montant_ht).toFixed(2)} DH</td>
         <td className="p-3 text-center text-nowrap">
           <button onClick={() => setEditingLine(line)} className="text-blue-600 hover:bg-blue-50 p-1 rounded mx-1">
@@ -392,6 +457,34 @@ export const TrackingLinesModal = ({ isOpen, onClose, trackingId, quoteNumber, i
           </button>
         </div>
 
+        {!isLoading && (
+          <div className="p-4 bg-gray-50 border-t flex justify-between items-center bg-gray-50/50">
+            {/* Légende du suivi visuel */}
+            <div className="flex items-center gap-4 text-sm bg-white p-2 rounded border border-gray-200">
+              <span className="font-semibold text-gray-700">Suivi:</span>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-blue-50 border border-blue-500 rounded-sm"></div>
+                <span className="text-gray-600 text-xs">Nouveau</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-green-50 border border-green-500 rounded-sm"></div>
+                <span className="text-gray-600 text-xs">Modifié</span>
+              </div>
+              <button
+                onClick={() => {
+                  if (window.confirm('Réinitialiser le suivi des modifications ?')) {
+                    resetTrackingMutation.mutate();
+                  }
+                }}
+                disabled={resetTrackingMutation.isLoading}
+                className="ml-2 text-xs text-blue-600 hover:text-blue-800 underline disabled:opacity-50"
+              >
+                Réinitialiser
+              </button>
+            </div>
+          </div>
+        )}
+        
         <div className="flex-1 overflow-y-auto bg-gray-50/50 p-4">
           {/* Main Form */}
           <div className="bg-white p-4 rounded-lg border shadow-sm mb-6">

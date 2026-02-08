@@ -14,7 +14,7 @@ class Project(models.Model):
     nom_projet = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     date_debut = models.DateField()
-    date_fin = models.DateField()
+    date_fin = models.DateField(blank=True, null=True)
     etat_projet = models.CharField(max_length=20, choices=STATUS_CHOICES, default='EN_ATTENTE')
     
     BILLING_STATUS_CHOICES = [

@@ -2,8 +2,14 @@ from core.views import BaseViewSet
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Sum, Q
-from .models import Employee, Material, MaterialCost, GeneralExpense
-from .serializers import EmployeeSerializer, MaterialSerializer, MaterialCostSerializer, GeneralExpenseSerializer
+from .models import Employee, Material, MaterialCost, GeneralExpense, MonthlyLabourCost
+from .serializers import (
+    EmployeeSerializer, 
+    MaterialSerializer, 
+    MaterialCostSerializer, 
+    GeneralExpenseSerializer,
+    MonthlyLabourCostSerializer
+)
 
 # Import external models for aggregation
 from suppliers.models import SupplierInvoice
@@ -60,55 +66,21 @@ class GeneralExpenseViewSet(BaseViewSet):
             date__month=month
         ).aggregate(total=Sum('amount'))['total'] or 0
 
-        # 2. Labor Expenses (Main-d'oeuvre) - Calculated from Project Duration & Workers
-        try:
-            from projects.models import Project
-            import calendar
-
-            # Determine month range
-            _, last_day = calendar.monthrange(year, month)
-            start_date = datetime.date(year, month, 1)
-            end_date = datetime.date(year, month, last_day)
-
-            # Find projects active in this month
-            projects_in_period = Project.objects.filter(
-                date_debut__lte=end_date,
-                date_fin__gte=start_date
-            ).prefetch_related('workers')
-
+        # 2. Labor Expenses - Manual Entry Only (totalement indépendant des projets)
+        manual_labour = MonthlyLabourCost.objects.filter(
+            year=year,
+            month=month
+        ).first()
+        
+        if manual_labour:
+            labor_total = manual_labour.amount
+            labor_source = 'manual'
+            labor_description = manual_labour.description
+        else:
+            # Aucune saisie manuelle = coût de main-d'œuvre à 0
             labor_total = 0
-            labor_breakdown = []
-
-            for project in projects_in_period:
-                # Calculate overlap duration
-                p_start = max(project.date_debut, start_date)
-                p_end = min(project.date_fin, end_date)
-                duration = (p_end - p_start).days + 1
-                
-                if duration > 0:
-                    # Sum daily salaries of all workers in this project
-                    project_daily_cost = project.workers.aggregate(total=Sum('daily_salary'))['total'] or 0
-                    project_month_cost = project_daily_cost * duration
-                    
-                    labor_total += project_month_cost
-                    
-                    labor_breakdown.append({
-                        'project': project.nom_projet,
-                        'duration_days': duration,
-                        'workers_count': project.workers.count(),
-                        'daily_run_rate': project_daily_cost,
-                        'total_cost': project_month_cost
-                    })
-
-        except ImportError:
-             # Fallback
-            labor_total = 0
-            labor_breakdown = []
-            if SalaryPeriod:
-                labor_total = SalaryPeriod.objects.filter(
-                    start_date__year=year,
-                    start_date__month=month
-                ).aggregate(total=Sum('real_salary'))['total'] or 0
+            labor_source = 'none'
+            labor_description = None
 
         # 3. Other Expenses (GeneralExpense)
         general_total_qs = self.queryset.filter(
@@ -125,9 +97,25 @@ class GeneralExpenseViewSet(BaseViewSet):
             'summary': {
                 'suppliers_total': suppliers_total,
                 'labor_total': labor_total,
+                'labor_source': labor_source,  # 'manual' ou 'none'
+                'labor_description': labor_description,
                 'general_options_total': general_total,
                 'grand_total': suppliers_total + labor_total + general_total
             },
-            'labor_breakdown': labor_breakdown,
             'general_expenses_breakdown': breakdown
         })
+
+class MonthlyLabourCostViewSet(BaseViewSet):
+    queryset = MonthlyLabourCost.objects.all()
+    serializer_class = MonthlyLabourCostSerializer
+    module_name = 'budget'
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        year = self.request.query_params.get('year')
+        month = self.request.query_params.get('month')
+        if year and month:
+            queryset = queryset.filter(year=year, month=month)
+        elif year:
+            queryset = queryset.filter(year=year)
+        return queryset

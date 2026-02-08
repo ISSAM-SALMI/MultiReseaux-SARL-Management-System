@@ -1059,11 +1059,35 @@ class QuoteViewSet(BaseViewSet):
 
 
 class QuoteLineViewSet(BaseViewSet):
-    queryset = QuoteLine.objects.all()
+    queryset = QuoteLine.objects.all().order_by('id')
     serializer_class = QuoteLineSerializer
     module_name = 'quote_lines'
     filterset_fields = ['quote']
     pagination_class = None # Disable pagination to show all lines
+    
+    @action(detail=False, methods=['POST'], url_path='reset-tracking')
+    def reset_tracking(self, request):
+        """Réinitialiser le suivi des modifications pour toutes les lignes d'un devis"""
+        quote_id = request.data.get('quote_id')
+        if not quote_id:
+            return Response({'error': 'quote_id requis'}, status=400)
+        
+        # Réinitialiser toutes les lignes du devis
+        lines = QuoteLine.objects.filter(quote_id=quote_id)
+        updated_count = 0
+        for line in lines:
+            line.change_status = 'unchanged'
+            line.original_designation = None
+            line.original_quantite = None
+            line.original_prix_unitaire = None
+            line.save()
+            updated_count += 1
+        
+        return Response({
+            'status': 'success',
+            'message': f'{updated_count} ligne(s) réinitialisée(s)',
+            'updated_count': updated_count
+        })
 
 class QuoteTrackingViewSet(BaseViewSet):
     queryset = QuoteTracking.objects.all()
@@ -1072,11 +1096,35 @@ class QuoteTrackingViewSet(BaseViewSet):
     filterset_fields = ['quote']
 
 class QuoteTrackingLineViewSet(BaseViewSet):
-    queryset = QuoteTrackingLine.objects.all()
+    queryset = QuoteTrackingLine.objects.all().order_by('id')
     serializer_class = QuoteTrackingLineSerializer
     module_name = 'quote_tracking_lines'
     filterset_fields = ['tracking']
     pagination_class = None
+
+    @action(detail=False, methods=['POST'], url_path='reset-tracking')
+    def reset_tracking(self, request):
+        """Réinitialiser le suivi des modifications pour toutes les lignes d'un tracking"""
+        tracking_id = request.data.get('tracking_id')
+        if not tracking_id:
+            return Response({'error': 'tracking_id requis'}, status=400)
+        
+        # Réinitialiser toutes les lignes du tracking
+        lines = QuoteTrackingLine.objects.filter(tracking_id=tracking_id)
+        updated_count = 0
+        for line in lines:
+            line.change_status = 'unchanged'
+            line.original_designation = None
+            line.original_quantite = None
+            line.original_prix_unitaire = None
+            line.save()
+            updated_count += 1
+        
+        return Response({
+            'status': 'success',
+            'message': f'{updated_count} ligne(s) de tracking réinitialisée(s)',
+            'updated_count': updated_count
+        })
 
 class QuoteGroupViewSet(BaseViewSet):
     queryset = QuoteGroup.objects.all()

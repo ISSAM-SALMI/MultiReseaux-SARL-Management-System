@@ -26,6 +26,15 @@ interface GeneralExpense {
   description?: string;
 }
 
+interface MonthlyLabourCost {
+  id_labour: number;
+  year: number;
+  month: number;
+  amount: number;
+  description?: string;
+  month_name?: string;
+}
+
 const CATEGORIES = [
   { value: 'TRANSPORT', label: 'Transport', icon: Truck },
   { value: 'FUEL', label: 'Carburant / Auto', icon: Car },
@@ -48,11 +57,25 @@ export const Expenses = () => {
         label: ''
     });
 
+    // Labour Cost Modal
+    const [isLabourModalOpen, setIsLabourModalOpen] = useState(false);
+    const [labourForm, setLabourForm] = useState({ amount: 0, description: '' });
+
     // Fetch Dashboard Stats
     const { data: stats } = useQuery(['expense-stats', selectedYear, selectedMonth], async () => {
         const res = await api.get(`/budget/general-expenses/monthly-dashboard/?year=${selectedYear}&month=${selectedMonth}`);
         return res.data;
     });
+
+    // 
+
+    // Fetch Monthly Labour Cost (manual entry)
+    const { data: labourCosts = [] } = useQuery(['labour-costs', selectedYear, selectedMonth], async () => {
+        const res = await api.get(`/budget/labour-costs/?year=${selectedYear}&month=${selectedMonth}`);
+        return res.data.results || res.data;
+    });
+
+    const currentLabourCost = labourCosts.length > 0 ? labourCosts[0] : null;
 
     // Fetch List of General Expenses
     const { data: expenses = [] } = useQuery(['general-expenses', selectedYear, selectedMonth], async () => {
@@ -84,6 +107,30 @@ export const Expenses = () => {
         }
     );
 
+    // Labour Cost Mutations
+    const labourMutation = useMutation(
+        (data: any) => currentLabourCost
+            ? api.put(`/budget/labour-costs/${currentLabourCost.id_labour}/`, { ...data, year: selectedYear, month: selectedMonth })
+            : api.post('/budget/labour-costs/', { ...data, year: selectedYear, month: selectedMonth }),
+        {
+            onSuccess: () => {
+                queryClient.invalidateQueries(['expense-stats']);
+                queryClient.invalidateQueries(['labour-costs']);
+                setIsLabourModalOpen(false);
+            }
+        }
+    );
+
+    const deleteLabourMutation = useMutation(
+        (id: number) => api.delete(`/budget/labour-costs/${id}/`),
+        {
+            onSuccess: () => {
+                queryClient.invalidateQueries(['expense-stats']);
+                queryClient.invalidateQueries(['labour-costs']);
+            }
+        }
+    );
+
     const formatMoney = (amount: number) => new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD' }).format(amount);
 
     const openModal = (expense?: GeneralExpense) => {
@@ -95,6 +142,14 @@ export const Expenses = () => {
             label: ''
         });
         setIsModalOpen(true);
+    };
+
+    const openLabourModal = () => {
+        setLabourForm({
+            amount: currentLabourCost?.amount || 0,
+            description: currentLabourCost?.description || ''
+        });
+        setIsLabourModalOpen(true);
     };
 
     return (
@@ -142,8 +197,28 @@ export const Expenses = () => {
 
                 <div className="bg-white p-5 rounded-xl border shadow-sm relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-3 opacity-10"><Users className="w-16 h-16" /></div>
-                    <p className="text-sm text-gray-500 font-medium">Main d'oeuvre</p>
-                    <p className="text-2xl font-bold text-gray-800 mt-2">{formatMoney(stats?.summary?.labor_total || 0)}</p>
+                    <div className="flex justify-between items-start mb-2">
+                        <p className="text-sm text-gray-500 font-medium">Main d'oeuvre</p>
+                        <button 
+                            onClick={openLabourModal}
+                            className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded transition-colors"
+                            title="Saisir coût manuel"
+                        >
+                            <Edit className="w-4 h-4" />
+                        </button>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-800">{formatMoney(stats?.summary?.labor_total || 0)}</p>
+                    {stats?.summary?.labor_source && (
+                        <div className="mt-2">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                stats.summary.labor_source === 'manual' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                                {stats.summary.labor_source === 'manual' ? '✓ Saisi manuellement' : 'Non défini'}
+                            </span>
+                        </div>
+                    )}
                     <div className="mt-2 h-1 w-full bg-gray-100 rounded-full overflow-hidden">
                         <div className="h-full bg-green-500" style={{ width: '100%' }}></div>
                     </div>
@@ -224,6 +299,80 @@ export const Expenses = () => {
                 </div>
             </div>
 
+            {/* Labour Costs Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                    <h2 className="text-lg font-semibold text-gray-800">Coûts Main-d'œuvre Mensuels</h2>
+                    <button 
+                        onClick={openLabourModal} 
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm flex items-center hover:bg-green-700 transition-colors"
+                    >
+                        <Plus className="w-4 h-4 mr-2" /> {currentLabourCost ? 'Modifier Coût' : 'Définir Coût'}
+                    </button>
+                </div>
+
+                <div className="p-6">
+                    {currentLabourCost ? (
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="text-sm text-gray-500 font-medium">Montant Main-d'œuvre</p>
+                                    <p className="text-3xl font-bold text-green-600 mt-1">{formatMoney(currentLabourCost.amount)}</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={openLabourModal}
+                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                        title="Modifier"
+                                    >
+                                        <Edit className="w-5 h-5" />
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            if(confirm('Supprimer le coût de main-d\'œuvre pour ce mois ?')) {
+                                                deleteLabourMutation.mutate(currentLabourCost.id_labour);
+                                            }
+                                        }}
+                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        title="Supprimer"
+                                    >
+                                        <Trash2 className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {currentLabourCost.description && (
+                                <div className="bg-gray-50 p-4 rounded-lg">
+                                    <p className="text-sm text-gray-500 font-medium mb-1">Note / Détails</p>
+                                    <p className="text-gray-700">{currentLabourCost.description}</p>
+                                </div>
+                            )}
+                            
+                            <div className="flex items-center gap-2 pt-2 border-t">
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    ✓ Coût manuel défini
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                    {new Date(selectedYear, selectedMonth-1).toLocaleString('fr-FR', {month: 'long', year: 'numeric'})}
+                                </span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8">
+                            <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                            <p className="text-gray-500 mb-2">Aucun coût de main-d'œuvre défini pour ce mois</p>
+                            <p className="text-sm text-gray-400 mb-4">Définissez manuellement le coût de la main-d'œuvre pour ce mois</p>
+                            <button 
+                                onClick={openLabourModal}
+                                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm inline-flex items-center hover:bg-green-700 transition-colors"
+                            >
+                                <Plus className="w-4 h-4 mr-2" /> Définir le coût
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {/* Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -288,6 +437,82 @@ export const Expenses = () => {
                             <div className="flex justify-end gap-3 mt-4">
                                 <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">Annuler</button>
                                 <button onClick={() => mutation.mutate(form)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Enregistrer</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Labour Cost Modal */}
+            {isLabourModalOpen && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <h2 className="text-xl font-bold">
+                                    {currentLabourCost ? 'Modifier' : 'Définir'} Coût Main-d'œuvre
+                                </h2>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    {new Date(selectedYear, selectedMonth-1).toLocaleString('fr-FR', {month: 'long', year: 'numeric'})}
+                                </p>
+                            </div>
+                            {currentLabourCost && (
+                                <button 
+                                    onClick={() => {
+                                        if(confirm('Supprimer le coût de main-d\'œuvre pour ce mois ?')) {
+                                            deleteLabourMutation.mutate(currentLabourCost.id_labour);
+                                            setIsLabourModalOpen(false);
+                                        }
+                                    }}
+                                    className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Montant Total (MAD)</label>
+                                <div className="relative">
+                                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                    <input 
+                                        type="number" 
+                                        className="w-full border rounded-lg pl-9 p-2"
+                                        value={labourForm.amount}
+                                        onChange={(e) => setLabourForm({...labourForm, amount: parseFloat(e.target.value) || 0})}
+                                        placeholder="Ex: 50000"
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Montant total de la main-d'œuvre pour ce mois
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Note / Détails</label>
+                                <textarea 
+                                    className="w-full border rounded-lg p-2"
+                                    rows={3}
+                                    value={labourForm.description || ''}
+                                    onChange={(e) => setLabourForm({...labourForm, description: e.target.value})}
+                                    placeholder="Optionnel : détails, justificatifs..."
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3 mt-4">
+                                <button 
+                                    onClick={() => setIsLabourModalOpen(false)} 
+                                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                                >
+                                    Annuler
+                                </button>
+                                <button 
+                                    onClick={() => labourMutation.mutate(labourForm)} 
+                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                >
+                                    {currentLabourCost ? 'Mettre à jour' : 'Enregistrer'}
+                                </button>
                             </div>
                         </div>
                     </div>

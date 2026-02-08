@@ -39,6 +39,12 @@ class QuoteGroup(models.Model):
 
 
 class QuoteLine(models.Model):
+    CHANGE_STATUS_CHOICES = [
+        ('unchanged', 'Inchangé'),
+        ('modified', 'Modifié'),
+        ('new', 'Nouveau'),
+    ]
+    
     # id is default PK
     quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name='lines', db_column='id_quote')
     group = models.ForeignKey(
@@ -53,11 +59,43 @@ class QuoteLine(models.Model):
     quantite = models.IntegerField()
     prix_unitaire = models.DecimalField(max_digits=12, decimal_places=2)
     montant_ht = models.DecimalField(max_digits=12, decimal_places=2)
+    
+    # Champs pour le suivi visuel des modifications
+    change_status = models.CharField(
+        max_length=20, 
+        choices=CHANGE_STATUS_CHOICES, 
+        default='unchanged',
+        help_text="Statut de modification pour suivi visuel"
+    )
+    original_designation = models.CharField(max_length=255, blank=True, null=True)
+    original_quantite = models.IntegerField(blank=True, null=True)
+    original_prix_unitaire = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
 
     class Meta:
         db_table = 'QUOTE_LINES'
 
     def save(self, *args, **kwargs):
+        # Détecter les modifications pour le suivi visuel
+        if self.pk:  # Si la ligne existe déjà
+            try:
+                old_line = QuoteLine.objects.get(pk=self.pk)
+                # Vérifier si des champs ont changé
+                if (old_line.designation != self.designation or 
+                    old_line.quantite != self.quantite or 
+                    old_line.prix_unitaire != self.prix_unitaire):
+                    # Marquer comme modifié et sauvegarder les valeurs originales si pas déjà fait
+                    if self.change_status == 'unchanged':
+                        self.change_status = 'modified'
+                        self.original_designation = old_line.designation
+                        self.original_quantite = old_line.quantite
+                        self.original_prix_unitaire = old_line.prix_unitaire
+            except QuoteLine.DoesNotExist:
+                pass
+        
+        # Le statut 'new' pour les nouvelles lignes doit être défini explicitement
+        # avant l'appel à save() si nécessaire (par exemple via l'API de suivi).
+        # Sinon, la valeur par défaut 'unchanged' est utilisée.
+        
         self.montant_ht = self.quantite * self.prix_unitaire
         super().save(*args, **kwargs)
         self.quote.calculate_totals()
@@ -92,6 +130,12 @@ class QuoteTrackingGroup(models.Model):
 
 
 class QuoteTrackingLine(models.Model):
+    CHANGE_STATUS_CHOICES = [
+        ('unchanged', 'Inchangé'),
+        ('modified', 'Modifié'),
+        ('new', 'Nouveau'),
+    ]
+    
     tracking = models.ForeignKey(QuoteTracking, on_delete=models.CASCADE, related_name='lines', db_column='id_tracking')
     group = models.ForeignKey(
         QuoteTrackingGroup, 
@@ -105,11 +149,43 @@ class QuoteTrackingLine(models.Model):
     quantite = models.IntegerField()
     prix_unitaire = models.DecimalField(max_digits=12, decimal_places=2)
     montant_ht = models.DecimalField(max_digits=12, decimal_places=2)
+    
+    # Champs pour le suivi visuel des modifications
+    change_status = models.CharField(
+        max_length=20, 
+        choices=CHANGE_STATUS_CHOICES, 
+        default='unchanged',
+        help_text="Statut de modification pour suivi visuel"
+    )
+    original_designation = models.CharField(max_length=255, blank=True, null=True)
+    original_quantite = models.IntegerField(blank=True, null=True)
+    original_prix_unitaire = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
 
     class Meta:
         db_table = 'QUOTE_TRACKING_LINES'
 
     def save(self, *args, **kwargs):
+        # Détecter les modifications pour le suivi visuel
+        if self.pk:  # Si la ligne existe déjà
+            try:
+                old_line = QuoteTrackingLine.objects.get(pk=self.pk)
+                # Vérifier si des champs ont changé
+                if (old_line.designation != self.designation or 
+                    old_line.quantite != self.quantite or 
+                    old_line.prix_unitaire != self.prix_unitaire):
+                    # Marquer comme modifié et sauvegarder les valeurs originales si pas déjà fait
+                    if self.change_status == 'unchanged':
+                        self.change_status = 'modified'
+                        self.original_designation = old_line.designation
+                        self.original_quantite = old_line.quantite
+                        self.original_prix_unitaire = old_line.prix_unitaire
+            except QuoteTrackingLine.DoesNotExist:
+                pass
+        
+        # Le statut 'new' doit être renseigné explicitement pour les nouvelles lignes
+        # de tracking (ajoutées après la copie initiale).
+        # La copie initiale utilisera la valeur par défaut 'unchanged'.
+        
         self.montant_ht = self.quantite * self.prix_unitaire
         super().save(*args, **kwargs)
 

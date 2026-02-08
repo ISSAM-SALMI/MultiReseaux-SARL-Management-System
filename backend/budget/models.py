@@ -71,3 +71,29 @@ class GeneralExpense(models.Model):
 
     def __str__(self):
         return f"{self.date} - {self.label} ({self.amount})"
+
+class MonthlyLabourCost(models.Model):
+    """
+    Modèle pour stocker les coûts de main-d'œuvre saisis manuellement par mois.
+    Séparé des autres dépenses pour un suivi indépendant et une historisation claire.
+    """
+    id_labour = models.AutoField(primary_key=True)
+    year = models.IntegerField(verbose_name="Année")
+    month = models.IntegerField(verbose_name="Mois")  # 1-12
+    amount = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Montant Main-d'œuvre")
+    description = models.TextField(blank=True, null=True, verbose_name="Note / Détails")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'MONTHLY_LABOUR_COSTS'
+        ordering = ['-year', '-month']
+        unique_together = [['year', 'month']]  # Une seule entrée par mois
+        verbose_name = "Coût Main-d'œuvre Mensuel"
+        verbose_name_plural = "Coûts Main-d'œuvre Mensuels"
+
+    def __str__(self):
+        months = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+                  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+        month_name = months[self.month] if 1 <= self.month <= 12 else str(self.month)
+        return f"{month_name} {self.year} - {self.amount} MAD"

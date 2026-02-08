@@ -17,6 +17,10 @@ interface QuoteLine {
   quantite: number;
   prix_unitaire: number;
   montant_ht: number;
+  change_status?: 'unchanged' | 'modified' | 'new';
+  original_designation?: string;
+  original_quantite?: number;
+  original_prix_unitaire?: number;
 }
 
 interface QuoteLinesModalProps {
@@ -44,13 +48,23 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
       try {
         const response = await api.get(`/quotes/lines/?quote=${quoteId}`);
         const data = response.data.results || response.data;
-        return Array.isArray(data) ? data : [];
+        const linesData = Array.isArray(data) ? data : [];
+        // Debug: Vérifier les données reçues
+        console.log('📊 QuoteLines received:', linesData.length, 'lines');
+        if (linesData.length > 0) {
+          console.log('   First line change_status:', linesData[0].change_status);
+        }
+        return linesData;
       } catch (e) {
         console.warn('Lines API error', e);
         return [];
       }
     },
-    { enabled: isOpen && !!quoteId }
+    { 
+      enabled: isOpen && !!quoteId,
+      refetchOnMount: true,
+      refetchOnWindowFocus: false
+    }
   );
 
   // Fetch Groups
@@ -79,23 +93,33 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
         group: line.group === '' ? null : line.group 
     }),
     {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['quoteLines', quoteId]);
+      onSuccess: async () => {
+        await queryClient.invalidateQueries(['quoteLines', quoteId]);
         queryClient.invalidateQueries('quotes');
         setNewLine(prev => ({ ...prev, designation: '', quantite: 1, prix_unitaire: 0 }));
+        console.log('✅ New line created, queries invalidated');
       },
-      onError: (err) => console.error(err)
+      onError: (err) => console.error('❌ Create line error:', err)
     }
   );
 
   const updateLineMutation = useMutation(
     (line: any) => api.put(`/quotes/lines/${line.id}/`, line),
     {
-      onSuccess: () => {
-        queryClient.invalidateQueries(['quoteLines', quoteId]);
+      onSuccess: async (response) => {
+        // Update cache immediately with the returned data to prevent jumping and show highlight
+        const updatedLine = response.data;
+        queryClient.setQueryData<QuoteLine[]>(['quoteLines', quoteId], (oldLines) => {
+          if (!oldLines) return [];
+          return oldLines.map(line => line.id === updatedLine.id ? updatedLine : line);
+        });
+        
+        await queryClient.invalidateQueries(['quoteLines', quoteId]);
         queryClient.invalidateQueries('quotes');
         setEditingLine(null);
+        console.log('✅ Line updated, cache updated and queries invalidated');
       },
+      onError: (err) => console.error('❌ Update line error:', err)
     }
   );
 
@@ -137,6 +161,19 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
     }
   );
 
+  const resetTrackingMutation = useMutation(
+    () => api.post('/quotes/lines/reset-tracking/', { quote_id: quoteId }),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['quoteLines', quoteId]);
+        alert('Suivi des modifications réinitialisé avec succès !');
+      },
+      onError: (error: any) => {
+        alert('Erreur lors de la réinitialisation: ' + (error.response?.data?.error || error.message));
+      }
+    }
+  );
+
   // Handlers
   const handleAddLine = (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,6 +206,10 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
 
     if (Array.isArray(lines)) {
       lines.forEach(line => {
+        // Filtrer les nouvelles lignes (créées dans le suivi)
+        // Le devis original ne doit pas afficher les lignes ajoutées post-validation
+        if (line.change_status === 'new') return;
+
         if (line.group) {
           if (map.has(line.group)) {
             map.get(line.group)?.push(line);
@@ -186,6 +227,15 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
   const renderLineRow = (line: QuoteLine) => {
      const isEditing = editingLine?.id === line.id && !!editingLine;
      
+     // Logique d'affichage pour le mode "Devis Original"
+     // Si la ligne a été modifiée, on affiche les valeurs originales pour préserver la vue du devis initial
+     const isModified = line.change_status === 'modified';
+     
+     const displayDesignation = (isModified && line.original_designation) ? line.original_designation : line.designation;
+     const displayQuantite = (isModified && line.original_quantite !== undefined && line.original_quantite !== null) ? line.original_quantite : line.quantite;
+     const displayPrix = (isModified && line.original_prix_unitaire !== undefined && line.original_prix_unitaire !== null) ? Number(line.original_prix_unitaire) : Number(line.prix_unitaire);
+     const displayTotal = displayQuantite * displayPrix;
+
      if (isEditing) {
        return (
         <tr key={line.id} className="bg-blue-50">
@@ -230,23 +280,38 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
      }
 
      return (
-       <tr key={line.id} className="hover:bg-gray-50 border-b last:border-0 border-gray-100">
-         <td className="p-3 text-sm">{line.designation}</td>
-         <td className="p-3 text-right text-sm">{line.quantite}</td>
-         <td className="p-3 text-right text-sm">{Number(line.prix_unitaire).toFixed(2)} DH</td>
-         <td className="p-3 text-right font-medium text-sm">{Number(line.montant_ht).toFixed(2)} DH</td>
+       <tr key={line.id} className="hover:bg-gray-50 border-b last:border-0 border-gray-100 transition-colors">
+         <td className="p-3 text-sm">
+           {displayDesignation}
+         </td>
+         <td className="p-3 text-right text-sm">
+           {displayQuantite}
+         </td>
+         <td className="p-3 text-right text-sm">
+           {displayPrix.toFixed(2)} DH
+         </td>
+         <td className="p-3 text-right font-medium text-sm">{displayTotal.toFixed(2)} DH</td>
          <td className="p-3 text-center text-nowrap">
-           <button onClick={() => setEditingLine(line)} className="text-blue-600 hover:bg-blue-50 p-1 rounded mx-1">
-             <Edit className="w-4 h-4" />
-           </button>
-           <button 
-             onClick={() => {
-               if (window.confirm('Supprimer cette ligne ?')) deleteLineMutation.mutate(line.id);
-             }} 
-             className="text-red-600 hover:bg-red-50 p-1 rounded mx-1"
-           >
-             <Trash2 className="w-4 h-4" />
-           </button>
+           {!isModified && (
+             <>
+               <button onClick={() => setEditingLine(line)} className="text-blue-600 hover:bg-blue-50 p-1 rounded mx-1">
+                 <Edit className="w-4 h-4" />
+               </button>
+               <button 
+                 onClick={() => {
+                   if (window.confirm('Supprimer cette ligne ?')) deleteLineMutation.mutate(line.id);
+                 }} 
+                 className="text-red-600 hover:bg-red-50 p-1 rounded mx-1"
+               >
+                 <Trash2 className="w-4 h-4" />
+               </button>
+             </>
+           )}
+           {isModified && (
+             <span className="text-xs text-gray-400 italic" title="Ligne modifiée dans le suivi (non modifiable ici)">
+               Verrouillé
+             </span>
+           )}
          </td>
        </tr>
      );
