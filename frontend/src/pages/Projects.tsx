@@ -139,7 +139,8 @@ export const Projects = () => {
     const payload = {
       ...formData,
       budget_total: formData.budget_total === '' ? 0 : formData.budget_total,
-      client: clientID
+      client: clientID,
+      date_fin: formData.date_fin === '' ? null : formData.date_fin
     };
     
     console.log("Submitting payload:", payload);
