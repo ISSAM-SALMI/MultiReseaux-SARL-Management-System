@@ -27,6 +27,10 @@ class ProjectSerializer(serializers.ModelSerializer):
     revenues = RevenueSerializer(many=True, read_only=True)
     expenses = ExpenseSerializer(many=True, read_only=True)
     client_name = serializers.CharField(source='client.nom_client', read_only=True)
+    date_fin = serializers.DateField(required=True, allow_null=False, error_messages={
+        'required': 'La date de fin est obligatoire.',
+        'null': 'La date de fin ne peut pas être vide.'
+    })
 
     class Meta:
         model = Project
