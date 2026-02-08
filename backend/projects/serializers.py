@@ -27,8 +27,18 @@ class ProjectSerializer(serializers.ModelSerializer):
     revenues = RevenueSerializer(many=True, read_only=True)
     expenses = ExpenseSerializer(many=True, read_only=True)
     client_name = serializers.CharField(source='client.nom_client', read_only=True)
+    # Expliciter que date_fin peut être null
+    date_fin = serializers.DateField(required=False, allow_null=True)
 
     class Meta:
         model = Project
         fields = '__all__'
+
+    def to_internal_value(self, data):
+        # Convertir chaîne vide en None pour date_fin
+        if 'date_fin' in data and data['date_fin'] == '':
+            _mutable = data.copy()
+            _mutable['date_fin'] = None
+            data = _mutable
+        return super().to_internal_value(data)
 
