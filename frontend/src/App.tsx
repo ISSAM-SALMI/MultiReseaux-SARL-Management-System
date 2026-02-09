@@ -15,6 +15,7 @@ import { Expenses } from './pages/Expenses';
 import { Revenue } from './pages/Revenue';
 import { Notifications } from './pages/Notifications';
 import { HREstimation } from './pages/HREstimation';
+import { Users } from './pages/Users';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
@@ -27,6 +28,7 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/users" element={<Users />} />
             <Route path="/clients" element={<Clients />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/quotes" element={<Quotes />} />

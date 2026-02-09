@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import api from '../api/axios';
 import { 
   LayoutDashboard, 
   Users, 
@@ -37,12 +38,24 @@ interface NavItem {
 }
 
 export const Layout = () => {
-  const logout = useAuthStore((state) => state.logout);
+  const { logout, user, setUser } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['Gestion Commerciale', 'Ressources Humaines']);
+
+  useEffect(() => {
+    // Refresh user data on mount to ensure permissions are up to date
+    api.get('/auth/users/me/')
+      .then(res => setUser(res.data))
+      .catch((err) => {
+        console.error("Failed to refresh user data", err);
+        if (err.response?.status === 401) {
+            handleLogout();
+        }
+      });
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -102,6 +115,11 @@ export const Layout = () => {
     { to: '/documents', icon: Files, label: 'Documents' },
     { to: '/notifications', icon: Bell, label: 'Notifications' },
   ];
+
+  // Admin Only Menu
+  if (user?.is_superuser || user?.is_staff) {
+      navItems.push({ to: '/users', icon: UserCog, label: 'Utilisateurs' });
+  }
 
   // Auto-expand group if active child
   useEffect(() => {

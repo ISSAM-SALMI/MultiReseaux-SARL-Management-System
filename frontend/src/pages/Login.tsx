@@ -11,6 +11,7 @@ export const Login = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const setToken = useAuthStore((state) => state.setToken);
+  const setUser = useAuthStore((state) => state.setUser);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -18,8 +19,16 @@ export const Login = () => {
     setIsLoading(true);
     setError('');
     try {
+      // 1. Get Token
       const response = await api.post('/auth/login/', { username, password });
       setToken(response.data.access, response.data.refresh);
+      
+      // 2. Get User Details (using the new token)
+      // Note: setToken updates the store, but axios interceptor uses `useAuthStore.getState().token`
+      // which is immediately available if we just set it.
+      const userResponse = await api.get('/auth/users/me/');
+      setUser(userResponse.data);
+
       navigate('/');
     } catch (err: any) {
       console.error("Login error:", err);

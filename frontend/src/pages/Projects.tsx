@@ -333,9 +333,7 @@ export const Projects = () => {
                     <td className="p-4">
                         <div className="text-sm text-gray-600 flex flex-col gap-1">
                             <span className="flex items-center"><Calendar className="w-3 h-3 mr-1 text-green-600"/> {new Date(project.date_debut).toLocaleDateString()}</span>
-                            {project.date_fin && (
-                                <span className="flex items-center"><Calendar className="w-3 h-3 mr-1 text-red-400"/> {new Date(project.date_fin).toLocaleDateString()}</span>
-                            )}
+                            <span className="flex items-center"><Calendar className="w-3 h-3 mr-1 text-red-400"/> {new Date(project.date_fin).toLocaleDateString()}</span>
                         </div>
                     </td>
                     <td className="p-4 font-medium text-gray-900">
