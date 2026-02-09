@@ -14,10 +14,10 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-me')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', '0') == '1'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(' ') # Changed separator from ',' to ' ' to match .env format
 
-
-# Application definition
+# CSRF Settings
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', 'http://localhost').split(' ') # Load from env or default to localhost
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -185,5 +185,6 @@ if os.environ.get('USE_S3') == 'true':
 else:
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 
-CSRF_TRUSTED_ORIGINS = ['http://35.208.189.105', 'http://localhost']
+# CSRF Config moved up to use env var
+# CSRF_TRUSTED_ORIGINS = ['http://35.208.189.105', 'http://localhost']
 
