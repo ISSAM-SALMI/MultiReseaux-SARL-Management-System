@@ -410,8 +410,20 @@ class QuoteViewSet(BaseViewSet):
         # Save to Documents
         if quote.project:
             file_name = f"devis_{quote.numero_devis}.pdf"
+            document_name = f"Devis {quote.numero_devis}"
+            
+            # Delete existing document with same name to keep only latest version
+            existing_docs = Document.objects.filter(
+                name=document_name,
+                project=quote.project
+            )
+            for doc in existing_docs:
+                if doc.file_url:
+                    doc.file_url.delete(save=False)
+                doc.delete()
+            
             document = Document(
-                name=f"Devis {quote.numero_devis}",
+                name=document_name,
                 type_document='PDF',
                 project=quote.project
             )
@@ -772,8 +784,20 @@ class QuoteViewSet(BaseViewSet):
                  file_name = f"BL_{safe_bl}.pdf"
 
             if quote.project:
+                document_name = f"Bon de Livraison {display_bl_number}"
+                
+                # Delete existing document with same name to keep only latest version
+                existing_docs = Document.objects.filter(
+                    name=document_name,
+                    project=quote.project
+                )
+                for doc in existing_docs:
+                    if doc.file_url:
+                        doc.file_url.delete(save=False)
+                    doc.delete()
+                
                 document = Document(
-                    name=f"Bon de Livraison {display_bl_number}",
+                    name=document_name,
                     type_document='PDF',
                     project=quote.project
                 )
@@ -1115,8 +1139,20 @@ class QuoteViewSet(BaseViewSet):
             file_name = f"Facture_{safe_fn}.pdf"
 
             if quote.project:
+                document_name = f"Facture {display_invoice_number}"
+                
+                # Delete existing document with same name to keep only latest version
+                existing_docs = Document.objects.filter(
+                    name=document_name,
+                    project=quote.project
+                )
+                for doc in existing_docs:
+                    if doc.file_url:
+                        doc.file_url.delete(save=False)
+                    doc.delete()
+                
                 document = Document(
-                    name=f"Facture {display_invoice_number}",
+                    name=document_name,
                     type_document='PDF',
                     project=quote.project
                 )
