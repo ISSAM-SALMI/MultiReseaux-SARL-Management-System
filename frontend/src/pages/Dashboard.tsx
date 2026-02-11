@@ -196,50 +196,310 @@ export const Dashboard = () => {
               <ArrowUpRight className="text-gray-400 w-5 h-5" />
            </div>
            
-           <div className="h-64 flex items-end justify-between space-x-2 px-2">
-              {kpis?.monthly_evolution?.map((item: any, idx: number) => {
-                 const maxAmount = Math.max(
-                   ...kpis.monthly_evolution.map((m: any) => Math.max(m.revenue || 0, m.expenses || 0)), 1
-                 );
-                 const revenueHeight = Math.max((item.revenue / maxAmount) * 100, 2);
-                 const expensesHeight = Math.max((item.expenses / maxAmount) * 100, 2);
-                 const hasProfit = (item.revenue || 0) >= (item.expenses || 0);
-                 
-                 return (
-                    <div key={idx} className="flex flex-col items-center flex-1 group h-full justify-end relative">
-                       {/* Bars Container */}
-                       <div className="w-full flex items-end justify-center space-x-1 h-full">
-                            {/* Revenue Bar */}
-                            <div 
-                                className="w-1/3 bg-blue-500 rounded-t-lg transition-all duration-500 group-hover:bg-blue-600 relative"
-                                style={{ height: `${revenueHeight}%` }}
-                            ></div>
-                            {/* Expenses Bar */}
-                            <div 
-                                className="w-1/3 bg-red-400 rounded-t-lg transition-all duration-500 group-hover:bg-red-500 relative"
-                                style={{ height: `${expensesHeight}%` }}
-                            ></div>
-                       </div>
-                       
-                       {/* Label */}
-                       <p className="text-xs text-gray-500 mt-2 font-medium">{item.month?.split('-')[1]}/{item.month?.split('-')[0].slice(2)}</p>
-                       
-                       {/* Tooltip */}
-                       <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs py-2 px-3 rounded opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none whitespace-nowrap shadow-lg">
-                           <div className="font-bold mb-1 border-b border-gray-700 pb-1">{item.month}</div>
-                           <div className="flex justify-between gap-4"><span className="text-blue-300">Revenus:</span> <span>{formatMoney(item.revenue)}</span></div>
-                           <div className="flex justify-between gap-4"><span className="text-red-300">Dépenses:</span> <span>{formatMoney(item.expenses)}</span></div>
-                           <div className={`flex justify-between gap-4 font-bold mt-1 ${hasProfit ? 'text-green-400' : 'text-red-400'}`}>
-                               <span>Marge:</span> <span>{formatMoney(item.margin)}</span>
-                           </div>
-                       </div>
+           <div className="h-72 relative">
+              {kpis?.monthly_evolution && kpis.monthly_evolution.length > 0 ? (
+                <>
+                  <svg className="w-full h-full" viewBox="0 0 600 260" preserveAspectRatio="none">
+                    {/* Gradient definitions */}
+                    <defs>
+                      {/* Revenue gradient */}
+                      <linearGradient id="revenueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" style={{ stopColor: '#3b82f6', stopOpacity: 0.3 }} />
+                        <stop offset="100%" style={{ stopColor: '#3b82f6', stopOpacity: 0.05 }} />
+                      </linearGradient>
+                      
+                      {/* Expenses gradient */}
+                      <linearGradient id="expensesGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" style={{ stopColor: '#f87171', stopOpacity: 0.3 }} />
+                        <stop offset="100%" style={{ stopColor: '#f87171', stopOpacity: 0.05 }} />
+                      </linearGradient>
+                      
+                      {/* Glow filter */}
+                      <filter id="glow">
+                        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                        <feMerge>
+                          <feMergeNode in="coloredBlur"/>
+                          <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                      </filter>
+                      
+                      {/* Shadow */}
+                      <filter id="shadow">
+                        <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.2"/>
+                      </filter>
+                    </defs>
+                    
+                    {/* Grid lines */}
+                    {[0, 25, 50, 75, 100].map((y) => (
+                      <line
+                        key={y}
+                        x1="40"
+                        y1={220 - (y * 2)}
+                        x2="580"
+                        y2={220 - (y * 2)}
+                        stroke="#e5e7eb"
+                        strokeWidth="1"
+                        strokeDasharray="5 5"
+                        opacity="0.5"
+                      />
+                    ))}
+                    
+                    {(() => {
+                      const maxAmount = Math.max(
+                        ...kpis.monthly_evolution.map((m: any) => Math.max(m.revenue || 0, m.expenses || 0)), 1
+                      );
+                      const points = kpis.monthly_evolution.length;
+                      const spacing = 540 / (points > 1 ? points - 1 : 1);
+                      
+                      // Revenue area path
+                      const revenueAreaPath = kpis.monthly_evolution
+                        .map((item: any, idx: number) => {
+                          const x = 40 + idx * spacing;
+                          const y = 220 - ((item.revenue / maxAmount) * 200);
+                          return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
+                        })
+                        .join(' ') + ` L ${40 + (points - 1) * spacing} 220 L 40 220 Z`;
+                      
+                      // Revenue line path
+                      const revenuePath = kpis.monthly_evolution
+                        .map((item: any, idx: number) => {
+                          const x = 40 + idx * spacing;
+                          const y = 220 - ((item.revenue / maxAmount) * 200);
+                          return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
+                        })
+                        .join(' ');
+                      
+                      // Expenses area path
+                      const expensesAreaPath = kpis.monthly_evolution
+                        .map((item: any, idx: number) => {
+                          const x = 40 + idx * spacing;
+                          const y = 220 - ((item.expenses / maxAmount) * 200);
+                          return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
+                        })
+                        .join(' ') + ` L ${40 + (points - 1) * spacing} 220 L 40 220 Z`;
+                      
+                      // Expenses line path
+                      const expensesPath = kpis.monthly_evolution
+                        .map((item: any, idx: number) => {
+                          const x = 40 + idx * spacing;
+                          const y = 220 - ((item.expenses / maxAmount) * 200);
+                          return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
+                        })
+                        .join(' ');
+                      
+                      return (
+                        <g>
+                          {/* Revenue area with gradient */}
+                          <path
+                            d={revenueAreaPath}
+                            fill="url(#revenueGradient)"
+                            className="transition-all duration-700"
+                          />
+                          
+                          {/* Expenses area with gradient */}
+                          <path
+                            d={expensesAreaPath}
+                            fill="url(#expensesGradient)"
+                            className="transition-all duration-700"
+                          />
+                          
+                          {/* Revenue line with glow */}
+                          <path
+                            d={revenuePath}
+                            fill="none"
+                            stroke="#3b82f6"
+                            strokeWidth="4"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            filter="url(#glow)"
+                            className="transition-all duration-700"
+                          />
+                          
+                          {/* Expenses line with glow */}
+                          <path
+                            d={expensesPath}
+                            fill="none"
+                            stroke="#f87171"
+                            strokeWidth="4"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            filter="url(#glow)"
+                            className="transition-all duration-700"
+                          />
+                          
+                          {/* Data points */}
+                          {kpis.monthly_evolution.map((item: any, idx: number) => {
+                            const x = 40 + idx * spacing;
+                            const revenueY = 220 - ((item.revenue / maxAmount) * 200);
+                            const expensesY = 220 - ((item.expenses / maxAmount) * 200);
+                            const hasProfit = (item.revenue || 0) >= (item.expenses || 0);
+                            
+                            return (
+                              <g key={idx}>
+                                {/* Revenue point */}
+                                <circle 
+                                  cx={x} 
+                                  cy={revenueY} 
+                                  r="6" 
+                                  fill="#3b82f6" 
+                                  stroke="white" 
+                                  strokeWidth="3"
+                                  filter="url(#shadow)"
+                                  className="cursor-pointer transition-all duration-300 hover:r-8"
+                                  style={{ animation: `fadeIn 0.5s ease-out ${idx * 0.1}s both` }}
+                                >
+                                  <title>Revenus: {formatMoney(item.revenue)}</title>
+                                </circle>
+                                
+                                {/* Expenses point */}
+                                <circle 
+                                  cx={x} 
+                                  cy={expensesY} 
+                                  r="6" 
+                                  fill="#f87171" 
+                                  stroke="white" 
+                                  strokeWidth="3"
+                                  filter="url(#shadow)"
+                                  className="cursor-pointer transition-all duration-300 hover:r-8"
+                                  style={{ animation: `fadeIn 0.5s ease-out ${idx * 0.1 + 0.05}s both` }}
+                                >
+                                  <title>Dépenses: {formatMoney(item.expenses)}</title>
+                                </circle>
+                                
+                                {/* Hover area for tooltip */}
+                                <rect
+                                  x={x - 20}
+                                  y="0"
+                                  width="40"
+                                  height="220"
+                                  fill="transparent"
+                                  className="cursor-pointer peer"
+                                />
+                                
+                                {/* Vertical line on hover */}
+                                <line
+                                  x1={x}
+                                  y1="20"
+                                  x2={x}
+                                  y2="220"
+                                  stroke="#94a3b8"
+                                  strokeWidth="1"
+                                  strokeDasharray="4 4"
+                                  opacity="0"
+                                  className="peer-hover:opacity-100 transition-opacity pointer-events-none"
+                                />
+                                
+                                {/* Tooltip on hover */}
+                                <g className="opacity-0 peer-hover:opacity-100 transition-opacity pointer-events-none">
+                                  <rect
+                                    x={x - 60}
+                                    y={Math.min(revenueY, expensesY) - 70}
+                                    width="120"
+                                    height="60"
+                                    rx="8"
+                                    fill="#1e293b"
+                                    filter="url(#shadow)"
+                                  />
+                                  <text
+                                    x={x}
+                                    y={Math.min(revenueY, expensesY) - 52}
+                                    textAnchor="middle"
+                                    fill="white"
+                                    fontSize="11"
+                                    fontWeight="bold"
+                                  >
+                                    {item.month?.split('-')[1]}/{item.month?.split('-')[0]}
+                                  </text>
+                                  <text
+                                    x={x}
+                                    y={Math.min(revenueY, expensesY) - 38}
+                                    textAnchor="middle"
+                                    fill="#93c5fd"
+                                    fontSize="9"
+                                  >
+                                    Rev: {(item.revenue / 1000).toFixed(1)}K
+                                  </text>
+                                  <text
+                                    x={x}
+                                    y={Math.min(revenueY, expensesY) - 26}
+                                    textAnchor="middle"
+                                    fill="#fca5a5"
+                                    fontSize="9"
+                                  >
+                                    Dép: {(item.expenses / 1000).toFixed(1)}K
+                                  </text>
+                                  <text
+                                    x={x}
+                                    y={Math.min(revenueY, expensesY) - 14}
+                                    textAnchor="middle"
+                                    fill={hasProfit ? '#86efac' : '#fca5a5'}
+                                    fontSize="10"
+                                    fontWeight="bold"
+                                  >
+                                    Δ {((item.margin || 0) / 1000).toFixed(1)}K
+                                  </text>
+                                </g>
+                              </g>
+                            );
+                          })}
+                        </g>
+                      );
+                    })()}
+                  </svg>
+                  
+                  {/* X-axis labels */}
+                  <div className="flex justify-between mt-3 px-10">
+                    {kpis.monthly_evolution.map((item: any, idx: number) => (
+                      <div key={idx} className="text-center flex-1">
+                        <div className="text-xs font-semibold text-gray-700">
+                          {item.month?.split('-')[1]}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          '{item.month?.split('-')[0].slice(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Legend with stats */}
+                  <div className="flex justify-center gap-8 mt-6 pb-2">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-full">
+                      <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
+                      <span className="text-xs font-semibold text-blue-700">Revenus</span>
+                      <span className="text-xs font-bold text-blue-900">
+                        {formatMoney(kpis.monthly_evolution.reduce((sum: number, m: any) => sum + (m.revenue || 0), 0) / kpis.monthly_evolution.length)}
+                      </span>
                     </div>
-                 )
-              })}
-              {(!kpis?.monthly_evolution || kpis.monthly_evolution.length === 0) && (
-                 <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg">
-                    Pas de données suffisantes pour l'historique
-                 </div>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-red-50 rounded-full">
+                      <div className="w-3 h-3 bg-gradient-to-r from-red-400 to-red-600 rounded-full shadow-lg"></div>
+                      <span className="text-xs font-semibold text-red-700">Dépenses</span>
+                      <span className="text-xs font-bold text-red-900">
+                        {formatMoney(kpis.monthly_evolution.reduce((sum: number, m: any) => sum + (m.expenses || 0), 0) / kpis.monthly_evolution.length)}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* CSS Animation */}
+                  <style>{`
+                    @keyframes fadeIn {
+                      from {
+                        opacity: 0;
+                        transform: scale(0);
+                      }
+                      to {
+                        opacity: 1;
+                        transform: scale(1);
+                      }
+                    }
+                  `}</style>
+                </>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-gray-400 text-lg mb-2">📊</div>
+                    <div className="text-gray-400 text-sm">Pas de données suffisantes pour l'historique</div>
+                  </div>
+                </div>
               )}
            </div>
         </div>
