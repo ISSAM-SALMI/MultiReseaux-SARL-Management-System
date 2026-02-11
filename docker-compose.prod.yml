@@ -19,6 +19,9 @@ services:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     env_file: .env.prod
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       - db
       - redis
@@ -28,6 +31,9 @@ services:
     build: ./backend
     command: celery -A multisarl worker -l info
     env_file: .env.prod
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       - backend
       - redis
@@ -37,6 +43,9 @@ services:
     build: ./backend
     command: celery -A multisarl beat -l info
     env_file: .env.prod
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       - backend
       - redis
