@@ -227,13 +227,11 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
   const renderLineRow = (line: QuoteLine) => {
      const isEditing = editingLine?.id === line.id && !!editingLine;
      
-     // Logique d'affichage pour le mode "Devis Original"
-     // Si la ligne a été modifiée, on affiche les valeurs originales pour préserver la vue du devis initial
-     const isModified = line.change_status === 'modified';
-     
-     const displayDesignation = (isModified && line.original_designation) ? line.original_designation : line.designation;
-     const displayQuantite = (isModified && line.original_quantite !== undefined && line.original_quantite !== null) ? line.original_quantite : line.quantite;
-     const displayPrix = (isModified && line.original_prix_unitaire !== undefined && line.original_prix_unitaire !== null) ? Number(line.original_prix_unitaire) : Number(line.prix_unitaire);
+     // Dans QuoteLinesModal, on affiche toujours les valeurs ACTUELLES
+     // (contrairement à TrackingLinesModal qui affiche les anciennes valeurs pour comparaison)
+     const displayDesignation = line.designation;
+     const displayQuantite = line.quantite;
+     const displayPrix = Number(line.prix_unitaire);
      const displayTotal = displayQuantite * displayPrix;
 
      if (isEditing) {
