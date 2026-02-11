@@ -36,8 +36,8 @@ class DashboardKPIView(APIView):
         # Project advances (Avances de projet)
         project_advances = Revenue.objects.aggregate(Sum('avance'))['avance__sum'] or 0
         
-        # Gross Margin calculation
-        gross_margin = Decimal(billed_projects) + Decimal(unbilled_projects) + Decimal(in_progress_projects) + Decimal(project_advances)
+        # Gross Margin calculation (WITHOUT advances as per Revenus & Marges)
+        gross_margin = Decimal(billed_projects) + Decimal(unbilled_projects) + Decimal(in_progress_projects)
         
         # === CALCUL DES DÉPENSES TOTALES (TOTAL EXPENSES) ===
         # Total Expenses = Labour costs + Supplies + Operating expenses
@@ -109,8 +109,8 @@ class DashboardKPIView(APIView):
                 project__in=projects_in_period
             ).aggregate(Sum('avance'))['avance__sum'] or 0
             
-            # Monthly Gross Margin
-            monthly_gross_margin = Decimal(monthly_billed) + Decimal(monthly_unbilled) + Decimal(monthly_in_progress) + Decimal(monthly_advances)
+            # Monthly Gross Margin (WITHOUT advances as per Revenus & Marges)
+            monthly_gross_margin = Decimal(monthly_billed) + Decimal(monthly_unbilled) + Decimal(monthly_in_progress)
 
             # Quotes statistics (Devis Signés/Livrés)
             monthly_quotes_amount = Quote.objects.filter(
