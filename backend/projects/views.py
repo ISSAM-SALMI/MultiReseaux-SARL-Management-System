@@ -55,8 +55,11 @@ class ProjectViewSet(BaseViewSet):
             project__in=projects_in_period
         ).aggregate(total=Sum('avance'))['total'] or 0
         
-        # Gross Margin = Projects in Progress + Unbilled Projects + Billed Projects + Project Advances
-        gross_margin = billed + unbilled + in_progress + project_advances
+        # Gross Margin = Projects in Progress + Unbilled Projects + Billed Projects (without advances)
+        gross_margin = billed + unbilled + in_progress
+        
+        # Gross Margin with Advance = Gross Margin - Project Advances
+        gross_margin_with_advance = gross_margin - project_advances
         
         # 2. Total Expenses (Dépenses Totales) = Labour + Supplies + Operating expenses
         from suppliers.models import SupplierInvoice
@@ -83,8 +86,8 @@ class ProjectViewSet(BaseViewSet):
         # Total Expenses = Labour + Supplies + Operating expenses
         total_expenses = suppliers_total + labor_total + general_total
         
-        # Net Margin = Gross Margin - Total Expenses
-        net_margin = gross_margin - total_expenses
+        # Net Margin = Gross Margin with Advance - Total Expenses
+        net_margin = gross_margin_with_advance - total_expenses
         
         return Response({
             'period': {'month': month, 'year': year},
