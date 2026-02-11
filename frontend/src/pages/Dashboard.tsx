@@ -100,17 +100,17 @@ export const Dashboard = () => {
       metricKey: 'labour'
     },
     {
-      title: "Autres",
+      title: "Charges",
       value: kpis?.expenses_breakdown?.general,
       icon: Layers,
       color: "bg-purple-50 text-purple-600",
       metricKey: 'general'
     },
     {
-      title: "Marge Brute",
-      value: kpis?.profit_margin,
+      title: "Marge Nette",
+      value: kpis?.net_margin || kpis?.profit_margin,
       icon: Activity,
-      color: kpis?.profit_margin >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600",
+      color: (kpis?.net_margin || kpis?.profit_margin || 0) >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600",
       metricKey: 'margin'
     }
   ];
