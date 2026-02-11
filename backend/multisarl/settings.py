@@ -19,6 +19,12 @@ ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(' ') # Changed separa
 # CSRF Settings
 CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', 'http://localhost').split(' ') # Load from env or default to localhost
 
+# Proxy and Security Settings for production
+# These settings help Django understand it's behind a proxy (nginx/load balancer)
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -166,7 +172,14 @@ SIMPLE_JWT = {
 }
 
 # CORS Settings
-CORS_ALLOW_ALL_ORIGINS = True # For dev only
+# In production, should be more restrictive
+CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True') == 'True'
+
+# If CORS_ALLOW_ALL_ORIGINS is False, specify allowed origins
+if not CORS_ALLOW_ALL_ORIGINS:
+    CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(' ')
+
+CORS_ALLOW_CREDENTIALS = True
 
 # Celery Settings
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
