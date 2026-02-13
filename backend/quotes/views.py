@@ -297,31 +297,48 @@ class QuoteViewSet(BaseViewSet):
 
         # --- 4. Totals Section ---
         total_ht = float(quote.total_ht)
+        # Recalculer le Total HT brut (avant remise) pour l'affichage
+        lines_total_ht = sum(line.montant_ht for line in quote.lines.all())
+        # Le montant stocké dans quote.total_ht est déjà le montant net (après remise)
+        
         tva_amount = total_ht * (float(quote.tva) / 100)
         total_ttc = float(quote.total_ttc)
 
-        totals_data = [
-            ['Total HT', f"{total_ht:,.2f} DH"],
-            [f'TVA ({quote.tva}%)', f"{tva_amount:,.2f} DH"],
-            ['Total TTC', f"{total_ttc:,.2f} DH"]
-        ]
+        totals_data = []
+        
+        # Si une remise existe, on affiche le détail
+        if quote.remise > 0:
+            totals_data.append(['Total HT', f"{float(lines_total_ht):,.2f} DH"])
+            totals_data.append([f'Remise ({quote.remise:g}%)', f"-{float(lines_total_ht) * (float(quote.remise)/100):,.2f} DH"])
+            totals_data.append(['Total HT Net', f"{total_ht:,.2f} DH"])
+        else:
+            totals_data.append(['Total HT', f"{total_ht:,.2f} DH"])
+            
+        totals_data.append([f'TVA ({quote.tva}%)', f"{tva_amount:,.2f} DH"])
+        totals_data.append(['Total TTC', f"{total_ttc:,.2f} DH"])
         
         totals_table = Table(totals_data, colWidths=[100, 120])
-        totals_table.setStyle(TableStyle([
+        
+        # Custom style for totals
+        totals_style = [
             ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, -1), 10),
             ('TEXTCOLOR', (0, 0), (-1, -1), COLOR_TEXT),
-            
-            # Total TTC Highlight
-            ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_TEXT), 
-            ('FONTSIZE', (0, 2), (-1, 2), 11),
-            ('LINEABOVE', (0, 2), (-1, 2), 1, COLOR_PRIMARY), 
-            ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ecf0f1')),
-            
             ('TOPPADDING', (0, 0), (-1, -1), 6),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ]))
+        ]
+        
+        # Highlight Total TTC (last row)
+        last_row_idx = len(totals_data) - 1
+        totals_style.extend([
+            ('TEXTCOLOR', (0, last_row_idx), (-1, last_row_idx), COLOR_TEXT), 
+            ('FONTSIZE', (0, last_row_idx), (-1, last_row_idx), 11),
+            ('LINEABOVE', (0, last_row_idx), (-1, last_row_idx), 1, COLOR_PRIMARY), 
+            ('BACKGROUND', (0, last_row_idx), (-1, last_row_idx), colors.HexColor('#ecf0f1')),
+        ])
+        
+        totals_table.setStyle(TableStyle(totals_style))
         
         # Place totals table to the right
         main_totals_table = Table([[None, totals_table]], colWidths=[available_width - 220, 220])
@@ -664,14 +681,25 @@ class QuoteViewSet(BaseViewSet):
             elements.append(Spacer(1, 15))
 
             # --- 4. Totals Section ---
-            tva_amount = total_ht_calc * (Decimal(quote.tva) / 100)
-            total_ttc = total_ht_calc + tva_amount
+            # Apply remise from the quote
+            total_ht_gross = total_ht_calc
+            montant_remise = total_ht_gross * (Decimal(quote.remise or 0) / 100)
+            total_ht_net = total_ht_gross - montant_remise
+            
+            tva_amount = total_ht_net * (Decimal(quote.tva) / 100)
+            total_ttc = total_ht_net + tva_amount
 
-            totals_data = [
-                ['Total HT', f"{total_ht_calc:,.2f} DH"],
-                [f'TVA ({quote.tva}%)', f"{tva_amount:,.2f} DH"],
-                ['Total TTC', f"{total_ttc:,.2f} DH"]
-            ]
+            totals_data = []
+            
+            if quote.remise and quote.remise > 0:
+                totals_data.append(['Total HT', f"{total_ht_gross:,.2f} DH"])
+                totals_data.append([f'Remise ({quote.remise:g}%)', f"-{montant_remise:,.2f} DH"])
+                totals_data.append(['Total HT Net', f"{total_ht_net:,.2f} DH"])
+            else:
+                totals_data.append(['Total HT', f"{total_ht_net:,.2f} DH"])
+                
+            totals_data.append([f'TVA ({quote.tva}%)', f"{tva_amount:,.2f} DH"])
+            totals_data.append(['Total TTC', f"{total_ttc:,.2f} DH"])
             
             totals_table = Table(totals_data, colWidths=[100, 120])
             totals_table.setStyle(TableStyle([
@@ -680,11 +708,11 @@ class QuoteViewSet(BaseViewSet):
                 ('FONTSIZE', (0, 0), (-1, -1), 10),
                 ('TEXTCOLOR', (0, 0), (-1, -1), COLOR_TEXT),
                 
-                # Total TTC Highlight
-                ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_TEXT),
-                ('FONTSIZE', (0, 2), (-1, 2), 11),
-                ('LINEABOVE', (0, 2), (-1, 2), 1, COLOR_PRIMARY), 
-                ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ecf0f1')),
+                # Total TTC Highlight (Last Row)
+                ('TEXTCOLOR', (0, -1), (-1, -1), COLOR_TEXT),
+                ('FONTSIZE', (0, -1), (-1, -1), 11),
+                ('LINEABOVE', (0, -1), (-1, -1), 1, COLOR_PRIMARY), 
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#ecf0f1')),
                 
                 ('TOPPADDING', (0, 0), (-1, -1), 6),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
@@ -1014,14 +1042,25 @@ class QuoteViewSet(BaseViewSet):
             elements.append(Spacer(1, 15))
 
             # --- 4. Totals Section ---
-            tva_amount = total_ht_calc * (Decimal(quote.tva) / 100)
-            total_ttc = total_ht_calc + tva_amount
+            # Apply remise from the quote
+            total_ht_gross = total_ht_calc
+            montant_remise = total_ht_gross * (Decimal(quote.remise or 0) / 100)
+            total_ht_net = total_ht_gross - montant_remise
+            
+            tva_amount = total_ht_net * (Decimal(quote.tva) / 100)
+            total_ttc = total_ht_net + tva_amount
 
-            totals_data = [
-                ['Total HT', f"{total_ht_calc:,.2f} DH"],
-                [f'TVA ({quote.tva}%)', f"{tva_amount:,.2f} DH"],
-                ['Total TTC', f"{total_ttc:,.2f} DH"]
-            ]
+            totals_data = []
+            
+            if quote.remise and quote.remise > 0:
+                totals_data.append(['Total HT', f"{total_ht_gross:,.2f} DH"])
+                totals_data.append([f'Remise ({quote.remise:g}%)', f"-{montant_remise:,.2f} DH"])
+                totals_data.append(['Total HT Net', f"{total_ht_net:,.2f} DH"])
+            else:
+                totals_data.append(['Total HT', f"{total_ht_net:,.2f} DH"])
+                
+            totals_data.append([f'TVA ({quote.tva}%)', f"{tva_amount:,.2f} DH"])
+            totals_data.append(['Total TTC', f"{total_ttc:,.2f} DH"])
             
             totals_table = Table(totals_data, colWidths=[100, 120])
             totals_table.setStyle(TableStyle([
@@ -1030,11 +1069,11 @@ class QuoteViewSet(BaseViewSet):
                 ('FONTSIZE', (0, 0), (-1, -1), 10),
                 ('TEXTCOLOR', (0, 0), (-1, -1), COLOR_TEXT),
                 
-                # Total TTC Highlight
-                ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_TEXT),
-                ('FONTSIZE', (0, 2), (-1, 2), 11),
-                ('LINEABOVE', (0, 2), (-1, 2), 1, COLOR_PRIMARY), 
-                ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ecf0f1')),
+                # Total TTC Highlight (Last Row)
+                ('TEXTCOLOR', (0, -1), (-1, -1), COLOR_TEXT),
+                ('FONTSIZE', (0, -1), (-1, -1), 11),
+                ('LINEABOVE', (0, -1), (-1, -1), 1, COLOR_PRIMARY), 
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#ecf0f1')),
                 
                 ('TOPPADDING', (0, 0), (-1, -1), 6),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 6),

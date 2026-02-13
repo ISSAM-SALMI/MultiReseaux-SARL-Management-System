@@ -7,6 +7,7 @@ class Quote(models.Model):
     objet = models.CharField(max_length=255)
     date_livraison = models.DateField()
     tva = models.DecimalField(max_digits=5, decimal_places=2, default=20.00)
+    remise = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Remise globale en pourcentage")
     total_ht = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     total_ttc = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='quotes', db_column='id_project')
@@ -16,7 +17,16 @@ class Quote(models.Model):
 
     def calculate_totals(self):
         lines = self.lines.all()
-        self.total_ht = sum(line.montant_ht for line in lines)
+        # Somme des montants HT des lignes (sans remise individuelle)
+        total_lines_ht = sum(line.montant_ht for line in lines)
+        
+        # Application de la remise globale
+        if self.remise > 0:
+            montant_remise = total_lines_ht * (self.remise / 100)
+            self.total_ht = total_lines_ht - montant_remise
+        else:
+            self.total_ht = total_lines_ht
+            
         self.total_ttc = self.total_ht * (1 + self.tva / 100)
         self.save()
 

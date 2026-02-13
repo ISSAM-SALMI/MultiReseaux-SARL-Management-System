@@ -14,6 +14,7 @@ interface Quote {
   total_ttc: number;
   project: number;
   tva: number;
+  remise: number;
 }
 
 interface Project {
@@ -33,7 +34,8 @@ export const Quotes = () => {
     objet: '',
     date_livraison: '',
     tva: 20,
-    project: ''
+    project: '',
+    remise: 0
   });
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -112,7 +114,8 @@ export const Quotes = () => {
       objet: '',
       date_livraison: '',
       tva: 20,
-      project: ''
+      project: '',
+      remise: 0
     });
     setIsModalOpen(true);
   };
@@ -125,7 +128,8 @@ export const Quotes = () => {
       objet: quote.objet,
       date_livraison: quote.date_livraison,
       tva: quote.tva,
-      project: quote.project.toString()
+      project: quote.project.toString(),
+      remise: quote.remise || 0
     });
     setIsModalOpen(true);
   };
@@ -302,15 +306,29 @@ export const Quotes = () => {
                   onChange={(e) => setFormData({ ...formData, date_livraison: e.target.value })}
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">TVA (%)</label>
-                <input
-                  type="number"
-                  required
-                  className="w-full p-2 border rounded"
-                  value={formData.tva}
-                  onChange={(e) => setFormData({ ...formData, tva: parseFloat(e.target.value) })}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">TVA (%)</label>
+                  <input
+                    type="number"
+                    required
+                    className="w-full p-2 border rounded"
+                    value={formData.tva}
+                    onChange={(e) => setFormData({ ...formData, tva: parseFloat(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Remise (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    className="w-full p-2 border rounded"
+                    value={formData.remise}
+                    onChange={(e) => setFormData({ ...formData, remise: parseFloat(e.target.value) })}
+                  />
+                </div>
               </div>
               <div className="flex justify-end space-x-2 pt-4">
                 <button

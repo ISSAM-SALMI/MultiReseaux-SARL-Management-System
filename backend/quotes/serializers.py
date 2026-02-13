@@ -113,7 +113,9 @@ class QuoteSerializer(serializers.ModelSerializer):
         # Update quote fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        instance.save()
+        
+        # Recalculate totals (which saves the instance) to account for changes in remise/tva
+        instance.calculate_totals()
 
         if lines_data is not None:
             # Simple strategy: delete all and recreate (or handle update logic)

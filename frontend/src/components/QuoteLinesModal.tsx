@@ -351,14 +351,14 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
               <tr className="text-xs text-gray-500 border-b bg-gray-50/50">
                 <th className="p-2 pl-3 w-[45%]">Désignation</th>
                 <th className="p-2 text-right w-[10%]">Qté</th>
-                <th className="p-2 text-right w-[15%]">P.U.</th>
+                <th className="p-2 text-right w-[20%]">P.U.</th>
                 <th className="p-2 text-right w-[15%]">Total HT</th>
-                <th className="p-2 text-center w-[15%]">Actions</th>
+                <th className="p-2 text-center w-[10%]">Actions</th>
               </tr>
             </thead>
             <tbody>
                {lines.length === 0 ? (
-                 <tr><td colSpan={5} className="p-4 text-center text-gray-400 italic text-sm">Aucune ligne dans ce groupe</td></tr>
+                 <tr><td colSpan={6} className="p-4 text-center text-gray-400 italic text-sm">Aucune ligne dans ce groupe</td></tr>
                ) : (
                  lines.map(renderLineRow)
                )}
@@ -449,7 +449,8 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
                   <button
                     type="submit"
                     disabled={createLineMutation.isLoading}
-                    className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 flex items-center justify-center transition"
+                    className="w-full p-2 rounded flex items-center justify-center transition bg-blue-600 hover:bg-blue-700 text-white"
+                    title="Ajouter ligne"
                   >
                     <Plus className="w-5 h-5" />
                   </button>
