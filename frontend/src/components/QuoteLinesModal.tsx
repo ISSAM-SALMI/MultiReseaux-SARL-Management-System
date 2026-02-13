@@ -240,11 +240,11 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
        return (
         <tr key={line.id} className="bg-blue-50">
            <td className="p-2">
-             <input
-               type="text"
+             <textarea
                value={editingLine.designation}
                onChange={(e) => setEditingLine({ ...editingLine, designation: e.target.value })}
-               className="w-full p-1 border rounded"
+               className="w-full p-1 border rounded resize-y min-h-[60px]"
+               rows={2}
              />
            </td>
            <td className="p-2">
@@ -281,8 +281,10 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
 
      return (
        <tr key={line.id} className="hover:bg-gray-50 border-b last:border-0 border-gray-100 transition-colors">
-         <td className="p-3 text-sm">
-           {displayDesignation}
+         <td className="p-3 text-sm align-top">
+           <div className="whitespace-pre-wrap break-words max-w-md">
+             {displayDesignation}
+           </div>
          </td>
          <td className="p-3 text-right text-sm">
            {displayQuantite}
@@ -353,14 +355,14 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
             </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left table-fixed">
             <thead>
               <tr className="text-xs text-gray-500 border-b bg-gray-50/50">
-                <th className="p-2 pl-3">Désignation</th>
-                <th className="p-2 text-right">Qté</th>
-                <th className="p-2 text-right">P.U.</th>
-                <th className="p-2 text-right">Total HT</th>
-                <th className="p-2 text-center">Actions</th>
+                <th className="p-2 pl-3 w-[45%]">Désignation</th>
+                <th className="p-2 text-right w-[10%]">Qté</th>
+                <th className="p-2 text-right w-[15%]">P.U.</th>
+                <th className="p-2 text-right w-[15%]">Total HT</th>
+                <th className="p-2 text-center w-[15%]">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -408,13 +410,13 @@ export const QuoteLinesModal = ({ quoteId, isOpen, onClose }: QuoteLinesModalPro
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 <div className="md:col-span-4">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Désignation</label>
-                  <input
-                    type="text"
+                  <textarea
                     value={newLine.designation}
                     onChange={(e) => setNewLine({ ...newLine, designation: e.target.value })}
-                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 text-sm"
-                    placeholder="Ex: Câble réseau..."
+                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 text-sm resize-y min-h-[60px]"
+                    placeholder="Ex: Câble réseau...\nVous pouvez saisir du texte sur plusieurs lignes"
                     required
+                    rows={2}
                   />
                 </div>
                 <div className="md:col-span-3">
