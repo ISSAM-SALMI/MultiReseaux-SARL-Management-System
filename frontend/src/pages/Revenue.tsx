@@ -120,7 +120,7 @@ export const Revenue = () => {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                 {/* 1. Facturé */}
                 <div className="bg-white p-4 rounded-xl border shadow-sm border-l-4 border-l-emerald-500">
                     <p className="text-xs text-gray-500 font-bold uppercase">Total Facturé</p>
@@ -142,14 +142,21 @@ export const Revenue = () => {
                     <Clock className="w-4 h-4 text-blue-500 mt-2 opacity-50 absolute top-4 right-4" />
                 </div>
 
-                {/* 4. Marge Brute */}
+                {/* 4. Avances Projets */}
+                <div className="bg-white p-4 rounded-xl border shadow-sm border-l-4 border-l-amber-400">
+                    <p className="text-xs text-gray-500 font-bold uppercase">Avances</p>
+                    <p className="text-xl font-bold text-gray-800 mt-1">{formatMoney(stats?.revenue?.project_advances || 0)}</p>
+                    <DollarSign className="w-4 h-4 text-amber-500 mt-2 opacity-50 absolute top-4 right-4" />
+                </div>
+
+                {/* 5. Marge Brute */}
                 <div className="bg-white p-4 rounded-xl border shadow-sm border-l-4 border-l-indigo-500 bg-indigo-50/50">
                     <p className="text-xs text-indigo-600 font-bold uppercase">Marge Brute</p>
                     <p className="text-xl font-bold text-indigo-900 mt-1">{formatMoney(stats?.revenue?.gross_margin || 0)}</p>
-                    <span className="text-[10px] text-indigo-400">Total Projets</span>
+                    <span className="text-[10px] text-indigo-400">Projets + Avances</span>
                 </div>
 
-                {/* 5. Marge Nette */}
+                {/* 6. Marge Nette */}
                 <div className={`p-4 rounded-xl border shadow-sm border-l-4 ${stats?.net_margin >= 0 ? 'border-l-green-600 bg-green-50' : 'border-l-red-600 bg-red-50'}`}>
                     <p className={`text-xs font-bold uppercase ${stats?.net_margin >= 0 ? 'text-green-700' : 'text-red-700'}`}>Marge Nette</p>
                     <p className={`text-xl font-bold mt-1 ${stats?.net_margin >= 0 ? 'text-green-900' : 'text-red-900'}`}>{formatMoney(stats?.net_margin || 0)}</p>

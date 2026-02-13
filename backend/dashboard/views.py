@@ -23,28 +23,46 @@ class DashboardKPIView(APIView):
         total_quotes_amount = Quote.objects.aggregate(Sum('total_ttc'))['total_ttc__sum'] or 0
         total_invoices_amount = Invoice.objects.aggregate(Sum('montant'))['montant__sum'] or 0
         
-        # === CALCUL DES DÉPENSES TOTALES ===
-        # 1. Achats Fournisseurs
+        # === CALCUL DE LA MARGE BRUTE (GROSS MARGIN) ===
+        # Gross Margin = Projects in Progress + Unbilled Projects + Billed Projects + Project Advances
+        
+        # Get all projects by billing status
+        from projects.models import Revenue
+        
+        billed_projects = Project.objects.filter(billing_status='FACTURE').aggregate(Sum('budget_total'))['budget_total__sum'] or 0
+        unbilled_projects = Project.objects.filter(billing_status='NON_FACTURE').aggregate(Sum('budget_total'))['budget_total__sum'] or 0
+        in_progress_projects = Project.objects.filter(billing_status='EN_COURS').aggregate(Sum('budget_total'))['budget_total__sum'] or 0
+        
+        # Project advances (Avances de projet)
+        project_advances = Revenue.objects.aggregate(Sum('avance'))['avance__sum'] or 0
+        
+        # Gross Margin calculation (WITHOUT advances as per Revenus & Marges)
+        gross_margin = Decimal(billed_projects) + Decimal(unbilled_projects) + Decimal(in_progress_projects)
+        
+        # === CALCUL DES DÉPENSES TOTALES (TOTAL EXPENSES) ===
+        # Total Expenses = Labour costs + Supplies + Operating expenses
+        
+        # 1. Supplies (Fournitures) - Achats Fournisseurs
         suppliers_expenses = SupplierInvoice.objects.aggregate(Sum('amount'))['amount__sum'] or 0
         
-        # 2. Main-d'œuvre (coûts manuels uniquement)
+        # 2. Labour costs (Main d'œuvre) - coûts manuels uniquement
         labour_expenses = MonthlyLabourCost.objects.aggregate(Sum('amount'))['amount__sum'] or 0
         
-        # 3. Autres Dépenses (GeneralExpense)
+        # 3. Operating expenses (Charges) - Autres Dépenses (GeneralExpense)
         general_expenses = GeneralExpense.objects.aggregate(Sum('amount'))['amount__sum'] or 0
         
         # Total des dépenses
         total_expenses = Decimal(suppliers_expenses) + Decimal(labour_expenses) + Decimal(general_expenses)
         
-        # === CALCUL DU REVENU ET DE LA MARGE ===
-        # Revenu = Total facturé
+        # === CALCUL DE LA MARGE NETTE (NET MARGIN) ===
+        # Net Margin = Gross Margin - Total Expenses
+        net_margin = gross_margin - total_expenses
+        
+        # Total revenue (for backward compatibility with existing charts)
         total_revenue = Decimal(total_invoices_amount)
         
-        # Marge brute = Revenu - Dépenses totales
-        profit_margin = total_revenue - total_expenses
-        
         # Taux de marge (en %)
-        margin_percentage = (profit_margin / total_revenue * 100) if total_revenue > 0 else 0
+        margin_percentage = (net_margin / gross_margin * 100) if gross_margin > 0 else 0
         
         # Recent Activity
         recent_projects = Project.objects.order_by('-date_debut')[:5].values('id_project', 'nom_projet', 'etat_projet', 'date_debut')
@@ -67,11 +85,32 @@ class DashboardKPIView(APIView):
         months_list.reverse()
 
         for year, month in months_list:
-            # Revenue from Invoices (Facturé) to be consistent with Global stats
-            monthly_revenue = Invoice.objects.filter(
-                date__year=year, 
-                date__month=month
-            ).aggregate(Sum('montant'))['montant__sum'] or 0
+            # Calculate project values for this month
+            import calendar
+            _, last_day = calendar.monthrange(year, month)
+            start_date = timezone.datetime(year, month, 1).date()
+            end_date = timezone.datetime(year, month, last_day).date()
+            
+            # Projects active in this period
+            from projects.models import Revenue
+            projects_in_period = Project.objects.filter(
+                date_debut__lte=end_date
+            ).filter(
+                Q(date_fin__gte=start_date) | Q(date_fin__isnull=True)
+            )
+            
+            # Calculate gross margin for the month
+            monthly_billed = projects_in_period.filter(billing_status='FACTURE').aggregate(Sum('budget_total'))['budget_total__sum'] or 0
+            monthly_unbilled = projects_in_period.filter(billing_status='NON_FACTURE').aggregate(Sum('budget_total'))['budget_total__sum'] or 0
+            monthly_in_progress = projects_in_period.filter(billing_status='EN_COURS').aggregate(Sum('budget_total'))['budget_total__sum'] or 0
+            
+            # Project advances for projects in this period
+            monthly_advances = Revenue.objects.filter(
+                project__in=projects_in_period
+            ).aggregate(Sum('avance'))['avance__sum'] or 0
+            
+            # Monthly Gross Margin (WITHOUT advances as per Revenus & Marges)
+            monthly_gross_margin = Decimal(monthly_billed) + Decimal(monthly_unbilled) + Decimal(monthly_in_progress)
 
             # Quotes statistics (Devis Signés/Livrés)
             monthly_quotes_amount = Quote.objects.filter(
@@ -84,14 +123,15 @@ class DashboardKPIView(APIView):
                 date_livraison__month=month
             ).count()
 
-            # Expenses
+            # Monthly Expenses
             ms = SupplierInvoice.objects.filter(date__year=year, date__month=month).aggregate(Sum('amount'))['amount__sum'] or 0
             ml = MonthlyLabourCost.objects.filter(year=year, month=month).aggregate(Sum('amount'))['amount__sum'] or 0
             mg = GeneralExpense.objects.filter(date__year=year, date__month=month).aggregate(Sum('amount'))['amount__sum'] or 0
             
             monthly_total_expenses = Decimal(ms) + Decimal(ml) + Decimal(mg)
-            monthly_rev_decimal = Decimal(monthly_revenue)
-            monthly_margin = monthly_rev_decimal - monthly_total_expenses
+            
+            # Monthly Net Margin = Gross Margin - Total Expenses
+            monthly_net_margin = monthly_gross_margin - monthly_total_expenses
             
             # Format YYYY-MM
             month_str = f"{year}-{month:02d}"
@@ -100,9 +140,9 @@ class DashboardKPIView(APIView):
                 'month': month_str,
                 'quotes_count': quotes_count,
                 'quotes_amount': float(monthly_quotes_amount),
-                'revenue': float(monthly_revenue), # Key expected by frontend
+                'revenue': float(monthly_gross_margin), # Gross margin for display (replaces simple revenue)
                 'expenses': float(monthly_total_expenses),
-                'margin': float(monthly_margin),
+                'margin': float(monthly_net_margin), # Net margin
                 'suppliers_expenses': float(ms),
                 'labour_expenses': float(ml),
                 'general_expenses': float(mg)
@@ -113,12 +153,20 @@ class DashboardKPIView(APIView):
             'active_projects': active_projects,
             'total_quotes_amount': float(total_quotes_amount),
             'total_invoices_amount': float(total_invoices_amount),
-            # Nouvelles données financières
-            'total_revenue': float(total_revenue),
+            # Financial data
+            'total_revenue': float(total_revenue), # Kept for backward compatibility
+            'gross_margin': float(gross_margin), # NEW: Marge Brute
             'total_expenses': float(total_expenses),
-            'profit_margin': float(profit_margin),
+            'profit_margin': float(net_margin), # NET MARGIN (renamed from profit_margin)
+            'net_margin': float(net_margin), # Also provided as net_margin for clarity
             'margin_percentage': float(margin_percentage),
-            # Détail des dépenses
+            # Breakdown
+            'project_breakdown': {
+                'billed': float(billed_projects),
+                'unbilled': float(unbilled_projects),
+                'in_progress': float(in_progress_projects),
+                'advances': float(project_advances)
+            },
             'expenses_breakdown': {
                 'suppliers': float(suppliers_expenses),
                 'labour': float(labour_expenses),

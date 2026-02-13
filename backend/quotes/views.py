@@ -18,6 +18,92 @@ import io
 from decimal import Decimal
 from datetime import datetime
 
+def number_to_words_fr(number):
+    """Convert a number to French words for invoice amounts."""
+    units = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"]
+    teens = ["dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"]
+    tens = ["", "dix", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante", "quatre-vingt", "quatre-vingt"]
+    
+    def convert_below_thousand(n):
+        if n == 0:
+            return ""
+        elif n < 10:
+            return units[n]
+        elif n < 20:
+            return teens[n - 10]
+        elif n < 70:
+            unit = n % 10
+            ten = n // 10
+            if unit == 0:
+                return tens[ten]
+            elif unit == 1 and ten in [2, 3, 4, 5, 6]:
+                return tens[ten] + "-et-un"
+            else:
+                return tens[ten] + "-" + units[unit]
+        elif n < 80:
+            return "soixante-" + teens[n - 70]
+        elif n < 100:
+            unit = n % 10
+            if n == 80:
+                return "quatre-vingts"
+            elif unit == 0:
+                return "quatre-vingt"
+            else:
+                return "quatre-vingt-" + units[unit] if n < 90 else "quatre-vingt-" + teens[n - 90]
+        else:
+            hundreds = n // 100
+            remainder = n % 100
+            if hundreds == 1:
+                hundred_word = "cent"
+            else:
+                hundred_word = units[hundreds] + " cent"
+            if remainder == 0 and hundreds > 1:
+                hundred_word += "s"
+            if remainder > 0:
+                return hundred_word + " " + convert_below_thousand(remainder)
+            return hundred_word
+    
+    # Handle decimal number
+    integer_part = int(number)
+    decimal_part = int(round((number - integer_part) * 100))
+    
+    if integer_part == 0:
+        result = "zéro"
+    elif integer_part < 1000:
+        result = convert_below_thousand(integer_part)
+    elif integer_part < 1000000:
+        thousands = integer_part // 1000
+        remainder = integer_part % 1000
+        if thousands == 1:
+            result = "mille"
+        else:
+            result = convert_below_thousand(thousands) + " mille"
+        if remainder > 0:
+            result += " " + convert_below_thousand(remainder)
+    elif integer_part < 1000000000:
+        millions = integer_part // 1000000
+        remainder = integer_part % 1000000
+        if millions == 1:
+            result = "un million"
+        else:
+            result = convert_below_thousand(millions) + " millions"
+        if remainder >= 1000:
+            thousands = remainder // 1000
+            if thousands == 1:
+                result += " mille"
+            else:
+                result += " " + convert_below_thousand(thousands) + " mille"
+            remainder = remainder % 1000
+        if remainder > 0:
+            result += " " + convert_below_thousand(remainder)
+    else:
+        result = str(integer_part)
+    
+    # Capitalize first letter
+    result = result.strip().capitalize()
+    
+    return f"{result} Dirhams {decimal_part:02d} CTS"
+
 class QuoteViewSet(BaseViewSet):
     queryset = Quote.objects.all()
     serializer_class = QuoteSerializer
@@ -36,7 +122,7 @@ class QuoteViewSet(BaseViewSet):
         
         # --- Pre-calculate Header/Footer Dimensions for Margins ---
         header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
-        footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'footer.png')
+        footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'newfooter.png')
         
         header_height_reserved = 0
         footer_height_reserved = 50 
@@ -228,7 +314,7 @@ class QuoteViewSet(BaseViewSet):
             ('TEXTCOLOR', (0, 0), (-1, -1), COLOR_TEXT),
             
             # Total TTC Highlight
-            ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_SECONDARY), 
+            ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_TEXT), 
             ('FONTSIZE', (0, 2), (-1, 2), 11),
             ('LINEABOVE', (0, 2), (-1, 2), 1, COLOR_PRIMARY), 
             ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ecf0f1')),
@@ -324,8 +410,20 @@ class QuoteViewSet(BaseViewSet):
         # Save to Documents
         if quote.project:
             file_name = f"devis_{quote.numero_devis}.pdf"
+            document_name = f"Devis {quote.numero_devis}"
+            
+            # Delete existing document with same name to keep only latest version
+            existing_docs = Document.objects.filter(
+                name=document_name,
+                project=quote.project
+            )
+            for doc in existing_docs:
+                if doc.file_url:
+                    doc.file_url.delete(save=False)
+                doc.delete()
+            
             document = Document(
-                name=f"Devis {quote.numero_devis}",
+                name=document_name,
                 type_document='PDF',
                 project=quote.project
             )
@@ -413,7 +511,7 @@ class QuoteViewSet(BaseViewSet):
 
              # --- Pre-calculate Header/Footer Dimensions for Margins ---
             header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
-            footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'footer.png')
+            footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'newfooter.png')
             
             header_height_reserved = 0
             footer_height_reserved = 50 
@@ -583,7 +681,7 @@ class QuoteViewSet(BaseViewSet):
                 ('TEXTCOLOR', (0, 0), (-1, -1), COLOR_TEXT),
                 
                 # Total TTC Highlight
-                ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_SECONDARY), # Red text
+                ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_TEXT),
                 ('FONTSIZE', (0, 2), (-1, 2), 11),
                 ('LINEABOVE', (0, 2), (-1, 2), 1, COLOR_PRIMARY), 
                 ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ecf0f1')),
@@ -605,7 +703,6 @@ class QuoteViewSet(BaseViewSet):
                 Spacer(1, 40)
             ]
             
-            # No border table
             client_sig_table = Table([[client_sig_text]], colWidths=[200])
             client_sig_table.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -613,32 +710,25 @@ class QuoteViewSet(BaseViewSet):
                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ]))
 
-            # Provider Signature (Image)
-            provider_sig_content = [
+            # Provider Signature (Text only, no image)
+            provider_sig_text = [
                 Paragraph("<b>Signature du Prestataire :</b>", normal_style),
-                Spacer(1, 5)
+                Spacer(1, 40)
             ]
             
-            signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'signature.jpeg')
-            if os.path.exists(signature_path):
-                try:
-                    sig_reader = ImageReader(signature_path)
-                    sw, sh = sig_reader.getSize()
-                    s_aspect = sh / float(sw)
-                    s_target_width = 120 
-                    s_target_height = s_target_width * s_aspect
-                    provider_sig_content.append(Image(signature_path, width=s_target_width, height=s_target_height))
-                except Exception as e:
-                    print(f"Error loading signature: {e}")
+            provider_sig_table = Table([[provider_sig_text]], colWidths=[200])
+            provider_sig_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 10),
+            ]))
             
             # Layout: Client Left, Provider Right
-            sigs_data = [[client_sig_table, provider_sig_content]]
+            sigs_data = [[client_sig_table, provider_sig_table]]
             sigs_layout_table = Table(sigs_data, colWidths=[available_width/2, available_width/2])
             sigs_layout_table.setStyle(TableStyle([
-                ('ALIGN', (0, 0), (0, 0), 'LEFT'),   # Client left
-                ('ALIGN', (1, 0), (1, 0), 'CENTER'), # Provider center
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (1, 0), (1, 0), 'LEFT'),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (1, 0), (1, 0), 30), # Add some parsing for provider
             ]))
             elements.append(sigs_layout_table)
 
@@ -694,8 +784,20 @@ class QuoteViewSet(BaseViewSet):
                  file_name = f"BL_{safe_bl}.pdf"
 
             if quote.project:
+                document_name = f"Bon de Livraison {display_bl_number}"
+                
+                # Delete existing document with same name to keep only latest version
+                existing_docs = Document.objects.filter(
+                    name=document_name,
+                    project=quote.project
+                )
+                for doc in existing_docs:
+                    if doc.file_url:
+                        doc.file_url.delete(save=False)
+                    doc.delete()
+                
                 document = Document(
-                    name=f"Bon de Livraison {display_bl_number}",
+                    name=document_name,
                     type_document='PDF',
                     project=quote.project
                 )
@@ -759,7 +861,7 @@ class QuoteViewSet(BaseViewSet):
 
              # --- Pre-calculate Header/Footer Dimensions for Margins ---
             header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
-            footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'footer.png')
+            footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'newfooter.png')
             
             header_height_reserved = 0
             footer_height_reserved = 50 
@@ -929,7 +1031,7 @@ class QuoteViewSet(BaseViewSet):
                 ('TEXTCOLOR', (0, 0), (-1, -1), COLOR_TEXT),
                 
                 # Total TTC Highlight
-                ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_SECONDARY), # Red text
+                ('TEXTCOLOR', (0, 2), (-1, 2), COLOR_TEXT),
                 ('FONTSIZE', (0, 2), (-1, 2), 11),
                 ('LINEABOVE', (0, 2), (-1, 2), 1, COLOR_PRIMARY), 
                 ('BACKGROUND', (0, 2), (-1, 2), colors.HexColor('#ecf0f1')),
@@ -941,10 +1043,15 @@ class QuoteViewSet(BaseViewSet):
             # Place totals table to the right
             main_totals_table = Table([[None, totals_table]], colWidths=[available_width - 220, 220])
             elements.append(main_totals_table)
-            elements.append(Spacer(1, 30))
+            elements.append(Spacer(1, 15))
+            
+            # Amount in words
+            amount_in_words = number_to_words_fr(float(total_ttc))
+            amount_text = f"Arrêtée la présente Facture à la Somme Total T.T.C de : <b>{amount_in_words} T.T.C</b>"
+            elements.append(Paragraph(amount_text, normal_style))
+            elements.append(Spacer(1, 20))
 
              # --- 5. Signature Section ---
-             # Same as delivery notes: Client Simple, Provider Image
             
             # Client Signature (Simple Text, No Box)
             client_sig_text = [
@@ -952,7 +1059,6 @@ class QuoteViewSet(BaseViewSet):
                 Spacer(1, 40)
             ]
             
-            # No border table
             client_sig_table = Table([[client_sig_text]], colWidths=[200])
             client_sig_table.setStyle(TableStyle([
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -960,32 +1066,25 @@ class QuoteViewSet(BaseViewSet):
                 ('LEFTPADDING', (0, 0), (-1, -1), 0),
             ]))
 
-            # Provider Signature (Image)
-            provider_sig_content = [
+            # Provider Signature (Text only, no image)
+            provider_sig_text = [
                 Paragraph("<b>Signature du Prestataire :</b>", normal_style),
-                Spacer(1, 5)
+                Spacer(1, 40)
             ]
             
-            signature_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'signature.jpeg')
-            if os.path.exists(signature_path):
-                try:
-                    sig_reader = ImageReader(signature_path)
-                    sw, sh = sig_reader.getSize()
-                    s_aspect = sh / float(sw)
-                    s_target_width = 120 
-                    s_target_height = s_target_width * s_aspect
-                    provider_sig_content.append(Image(signature_path, width=s_target_width, height=s_target_height))
-                except Exception as e:
-                    print(f"Error loading signature: {e}")
+            provider_sig_table = Table([[provider_sig_text]], colWidths=[200])
+            provider_sig_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 10),
+            ]))
             
             # Layout: Client Left, Provider Right
-            sigs_data = [[client_sig_table, provider_sig_content]]
+            sigs_data = [[client_sig_table, provider_sig_table]]
             sigs_layout_table = Table(sigs_data, colWidths=[available_width/2, available_width/2])
             sigs_layout_table.setStyle(TableStyle([
-                ('ALIGN', (0, 0), (0, 0), 'LEFT'),   # Client left
-                ('ALIGN', (1, 0), (1, 0), 'CENTER'), # Provider center
+                ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                ('ALIGN', (1, 0), (1, 0), 'LEFT'),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (1, 0), (1, 0), 30), # Add some parsing for provider
             ]))
             elements.append(sigs_layout_table)
 
@@ -1040,8 +1139,20 @@ class QuoteViewSet(BaseViewSet):
             file_name = f"Facture_{safe_fn}.pdf"
 
             if quote.project:
+                document_name = f"Facture {display_invoice_number}"
+                
+                # Delete existing document with same name to keep only latest version
+                existing_docs = Document.objects.filter(
+                    name=document_name,
+                    project=quote.project
+                )
+                for doc in existing_docs:
+                    if doc.file_url:
+                        doc.file_url.delete(save=False)
+                    doc.delete()
+                
                 document = Document(
-                    name=f"Facture {display_invoice_number}",
+                    name=document_name,
                     type_document='PDF',
                     project=quote.project
                 )

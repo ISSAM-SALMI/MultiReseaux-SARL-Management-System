@@ -107,7 +107,7 @@ class SupplierInvoiceViewSet(viewsets.ModelViewSet):
             
             # Chemins header/footer
             header_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'entete.png')
-            footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'footer.png')
+            footer_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'newfooter.png')
             
             header_height_reserved = 0
             footer_height_reserved = 50

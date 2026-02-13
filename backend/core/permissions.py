@@ -10,8 +10,8 @@ class RBACPermission(permissions.BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
             
-        # Superuser has all permissions
-        if request.user.is_superuser:
+        # Superuser and staff users have all permissions
+        if request.user.is_superuser or request.user.is_staff:
             return True
 
         # Determine module from view (view should have 'module_name' attribute)

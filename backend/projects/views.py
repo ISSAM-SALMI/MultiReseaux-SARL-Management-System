@@ -49,32 +49,45 @@ class ProjectViewSet(BaseViewSet):
                 unbilled = item['total'] or 0
             elif item['billing_status'] == 'EN_COURS':
                 in_progress = item['total'] or 0
-                
+        
+        # Project Advances (Avances de projet) - Sum all advances from Revenue model
+        project_advances = Revenue.objects.filter(
+            project__in=projects_in_period
+        ).aggregate(total=Sum('avance'))['total'] or 0
+        
+        # Gross Margin = Projects in Progress + Unbilled Projects + Billed Projects (without advances)
         gross_margin = billed + unbilled + in_progress
         
-        # 2. Expenses (Monthly)
-        from suppliers.models import SupplierInvoice
-        try:
-            from payroll.models import SalaryPeriod
-        except ImportError:
-            SalaryPeriod = None
-        from budget.models import GeneralExpense
+        # Gross Margin with Advance = Gross Margin - Project Advances
+        gross_margin_with_advance = gross_margin - project_advances
         
+        # 2. Total Expenses (Dépenses Totales) = Labour + Supplies + Operating expenses
+        from suppliers.models import SupplierInvoice
+        from budget.models import GeneralExpense, MonthlyLabourCost
+        
+        # Supplies (Fournitures) - Supplier invoices
         suppliers_total = SupplierInvoice.objects.filter(
             date__year=year, 
             date__month=month
         ).aggregate(total=Sum('amount'))['total'] or 0
 
-        labor_total = 0
+        # Labor costs (Main d'œuvre) - From manual monthly labor cost entries
+        labor_total = MonthlyLabourCost.objects.filter(
+            year=year,
+            month=month
+        ).aggregate(total=Sum('amount'))['total'] or 0
 
+        # Operating expenses (Charges) - General expenses
         general_total = GeneralExpense.objects.filter(
             date__year=year,
             date__month=month
         ).aggregate(total=Sum('amount'))['total'] or 0
         
+        # Total Expenses = Labour + Supplies + Operating expenses
         total_expenses = suppliers_total + labor_total + general_total
         
-        net_margin = gross_margin - total_expenses
+        # Net Margin = Gross Margin with Advance - Total Expenses
+        net_margin = gross_margin_with_advance - total_expenses
         
         return Response({
             'period': {'month': month, 'year': year},
@@ -82,6 +95,7 @@ class ProjectViewSet(BaseViewSet):
                 'billed': billed,
                 'unbilled': unbilled,
                 'in_progress': in_progress,
+                'project_advances': project_advances,
                 'gross_margin': gross_margin
             },
             'expenses': {
